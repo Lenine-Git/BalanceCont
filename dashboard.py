@@ -478,6 +478,7 @@ def main():
         st.download_button(label="📥 Baixar PDF", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
     st.markdown("""<div class="footer">© INOVALENIN Soluções em Tecnologias - 2025</div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="footer">atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
