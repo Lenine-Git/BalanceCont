@@ -67,7 +67,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DO DASHBOARD (VERSÃO 7.9)
+# LÓGICA DO DASHBOARD (VERSÃO 7.9 REFINADA)
 # ==============================================================================
 
 # --- 2. LÓGICA DE NEGÓCIO ---
@@ -147,9 +147,16 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
 
     contexto = f"Empresa: {nome_empresa} (CNPJ: {cnpj_empresa})\nPeríodo Analisado: {periodo_analise}"
     
+    # Prompt refinado para tom mais humano e profissional, com disclaimer explícito
     prompt = f"""
     {contexto}
-    Atue como Analista Financeiro Sênior. Gere um Relatório Gerencial detalhado referente ao período informado.
+    Atue como um Analista Financeiro Sênior da INOVALENIN.
+    Sua tarefa é gerar um Relatório Gerencial detalhado com base nos dados fornecidos.
+    
+    DIRETRIZES DE TOM E ESTILO:
+    - O texto deve ser profissional, direto e técnico, mas acessível a gestores.
+    - Evite soar robótico. Use conectivos e frases bem construídas.
+    - Deixe explícito no início que esta análise foi gerada automaticamente pela rede neural da INOVALENIN.
     
     DADOS APURADOS:
     - Liquidez Corrente: {kpis['Liquidez Corrente']:.2f}
@@ -162,27 +169,30 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
 
     ESTRUTURA OBRIGATÓRIA (Markdown):
     
-    # 1. Identificação da empresa analisada
-    [Nome, CNPJ, Período e contexto]
+    # 1. Identificação e Contexto
+    [Inicie confirmando que este relatório é uma análise automática da INOVALENIN. Cite Nome, CNPJ e Período]
 
     # 2. Índices Financeiros
-    ## 2.1 Análise dos índices financeiros detalhada
-    [Analise cada índice com profundidade]
-    ## 2.2 Notas explicativas
-    [Glossário curto]
+    ## 2.1 Análise Detalhada
+    [Analise cada índice com profundidade, correlacionando-os quando possível]
+    ## 2.2 Notas Explicativas
+    [Breve glossário técnico dos termos usados]
 
-    # 3. Análise estruturada
-    ## 3.1 Análise geral
-    [Visão macro]
+    # 3. Análise Estruturada
+    ## 3.1 Visão Geral
+    [Diagnóstico macro da saúde financeira]
     ## 3.2 Pontos Positivos
-    [Bullets]
-    ## 3.3 Pontos críticos/inconsistências
-    [Bullets]
+    [Destaques favoráveis]
+    ## 3.3 Pontos de Atenção
+    [Riscos e inconsistências]
 
-    # 4. Conclusão Técnica
-    [Parecer final]
-    ## 4.1 Recomendações Técnicas
-    [Ações sugeridas - no final recomende a visita ao um profissional contábil para detalhamento do relatório, bem como a INOVALENIN Soluções e Técnologia como um aparceira de aplicativos de gestão]
+    # 4. Conclusão Técnica e Recomendações
+    [Parecer final sintético]
+    ## 4.1 Plano de Ação
+    [Sugestões práticas]
+    
+    ---
+    [Encerre com este parágrafo EXATO: "Recomendamos que este relatório seja discutido com a contabilidade da empresa para esclarecimentos mais detalhados. Acesse o site da INOVALENIN (www.inovalenin.com.br) para conhecer mais soluções tecnológicas que auxiliarão na gestão da sua empresa."]
     """
 
     try:
@@ -202,7 +212,9 @@ class PDFReport(FPDF):
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, 'INOVALENIN Solucoes em Tecnologia - 2025', 0, 0, 'C')
+        # Rodapé padronizado conforme solicitado
+        rodape_texto = "Relatorio criado por INOVALENIN Solucoes em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br"
+        self.cell(0, 10, rodape_texto, 0, 0, 'C')
 
 def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     pdf = PDFReport()
@@ -217,13 +229,14 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     pdf.ln(10)
     
     pdf.set_font("Arial", size=10)
+    # Remove formatação Markdown para PDF limpo
     texto_limpo = texto_ia.replace('**', '').replace('##', '').replace('#', '')
     texto_limpo = texto_limpo.encode('latin-1', 'replace').decode('latin-1')
     pdf.multi_cell(0, 5, texto_limpo)
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA & PERÍODO INTELIGENTE ---
+# --- 5. EXTRAÇÃO ROBUSTA ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -241,21 +254,11 @@ def parse_br_currency(valor_str):
         return 0.0
 
 def extrair_periodo_inteligente(texto_completo):
-    """
-    Busca datas finais e define o exercício (Ano Inteiro).
-    """
-    # 1. Tenta achar período explícito "01/2024 a 12/2024"
     match_periodo = re.search(r"(?:Período|Exercício|Competência).*?(\d{2}/\d{2,4}\s+a\s+\d{2}/\d{2,4})", texto_completo, re.IGNORECASE)
-    if match_periodo:
-        return match_periodo.group(1).strip()
+    if match_periodo: return match_periodo.group(1).strip()
 
-    # 2. Se não achou, procura por datas de "Encerramento" ou "Posição em"
-    # Procura datas no formato XX/XX/XXXX
     datas_encontradas = re.findall(r"(\d{2}/\d{2}/\d{4})", texto_completo)
-    
     data_encerramento = None
-    
-    # Procura contextos específicos para validar a data
     termos_encerramento = ["ENCERRADO", "ENCERRAMENTO", "POSIÇÃO EM", "BASE EM", "EM 31 DE"]
     
     for termo in termos_encerramento:
@@ -264,22 +267,17 @@ def extrair_periodo_inteligente(texto_completo):
             data_encerramento = match_contexto.group(1)
             break
             
-    # Se não achou contexto, tenta pegar a maior data encontrada no documento (assumindo que seja o fim do exercicio)
     if not data_encerramento and datas_encontradas:
-        # Filtra datas futuras improváveis ou muito antigas se necessário, aqui pegamos a última válida
         try:
             datas_obj = [datetime.strptime(d, "%d/%m/%Y") for d in datas_encontradas]
             datas_obj.sort()
             data_final = datas_obj[-1]
             data_encerramento = data_final.strftime("%d/%m/%Y")
-        except:
-            pass
+        except: pass
 
-    # 3. Monta o período anual baseado na data encontrada
     if data_encerramento:
         dia, mes, ano = data_encerramento.split('/')
         return f"01/01/{ano} a {dia}/{mes}/{ano}"
-        
     return ""
 
 def extrair_dados_texto(texto_completo):
@@ -296,7 +294,6 @@ def extrair_dados_texto(texto_completo):
                 trecho_encontrado = match.group(0)
                 if any(bad.upper() in trecho_encontrado.upper() for bad in avoid): continue
                 val_str = match.group(1)
-                # Filtra anos se forem confundidos com valores
                 if val_str in ['2023', '2024', '2025', '2022']: continue
                 val = parse_br_currency(val_str)
                 if val > 0: return val
@@ -337,13 +334,9 @@ def processar_arquivo(uploaded_file):
     nome = "Empresa Analisada"
     match_nome = re.search(r"(?:Nome|Empresa)\s*[:\n-]+\s*(.{5,60})", texto_full, re.IGNORECASE)
     if match_nome: nome = match_nome.group(1).strip().split('\n')[0]
-    
     match_cnpj = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_full)
     cnpj = match_cnpj.group(0) if match_cnpj else ""
-
-    # Extração Inteligente do Período
     periodo = extrair_periodo_inteligente(texto_full)
-
     v = extrair_dados_texto(texto_full)
     dados = {
         "bp": BalancoPatrimonial(v['ac'], v['anc'], v['pc'], v['pnc'], 0, v['est']),
@@ -411,7 +404,8 @@ def main():
     
     if not dados_iniciais:
         st.info("👋 **Pronto para analisar!** Envie o PDF ou Excel no menu lateral.")
-        st.markdown("""<div class="footer">© INOVALENIN Soluções em Tecnologias - 2025</div>""", unsafe_allow_html=True)
+        # Rodapé padronizado na tela inicial também
+        st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
         st.stop()
 
     st.markdown("### 🔍 Conferência de Dados")
@@ -477,8 +471,7 @@ def main():
         pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final)
         st.download_button(label="📥 Baixar PDF", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
-    st.markdown("""<div class="footer">© INOVALENIN Soluções em Tecnologias - 2025</div>""", unsafe_allow_html=True)
-    st.markdown("""<div class="footer">atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
