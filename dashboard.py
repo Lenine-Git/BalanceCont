@@ -26,7 +26,6 @@ def check_password():
     if st.session_state['logged_in']:
         return True
 
-    # Layout de Login
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.markdown("## 🔐 Portal do Cliente - INOVALENIN")
@@ -36,48 +35,32 @@ def check_password():
         senha = st.text_input("Senha:", type="password", placeholder="Sua senha")
         
         if st.button("Acessar Sistema", type="primary"):
-            # Verifica se os segredos de usuários existem
             if "credentials" in st.secrets:
-                # Busca o usuário no dicionário de credenciais
                 usuarios_db = st.secrets["credentials"]
-                
                 if usuario in usuarios_db and usuarios_db[usuario] == senha:
                     st.session_state['logged_in'] = True
                     st.session_state['username'] = usuario
-                    
-                    # Define se é Admin (Master)
                     if usuario == "admin_lenine": 
                         st.session_state['user_role'] = "admin"
                     else:
                         st.session_state['user_role'] = "cliente"
-                        
                     st.toast(f"Bem-vindo, {usuario}!", icon="✅")
                     time.sleep(0.5)
                     st.rerun()
                 else:
-                    st.error("🚫 Usuário ou senha incorretos. Acesso negado.")
+                    st.error("🚫 Usuário ou senha incorretos.")
             else:
-                st.error("⚠️ Erro de Configuração: Base de usuários não encontrada no servidor.")
-                
+                st.error("⚠️ Erro de Configuração: Base de usuários não encontrada.")
     return False
 
-# Bloqueia execução se não logar
 if not check_password():
     st.stop()
 
-# --- ÁREA DO MASTER (ADMIN) ---
-# Se for o Lenine logado, mostra painel de controle no topo
+# --- ADMIN PANEL ---
 if st.session_state['user_role'] == "admin":
-    with st.expander("🛠️ Painel Master (Visível apenas para você)"):
-        st.write(f"Olá, Master. Você está logado como **{st.session_state['username']}**.")
-        st.info("""
-        **Para Gerenciar Usuários (Criar/Bloquear/Resetar):**
-        1. Vá no painel do Streamlit Cloud (share.streamlit.io).
-        2. Clique em **Settings** > **Secrets**.
-        3. Edite a seção `[credentials]`.
-        4. Para **Bloquear**: Apague a linha do usuário.
-        5. Para **Resetar**: Mude a senha na frente do nome.
-        """)
+    with st.expander("🛠️ Painel Master"):
+        st.write(f"Logado como: **{st.session_state['username']}**")
+        st.info("Gerencie usuários através dos Secrets do Streamlit Cloud.")
 
 st.sidebar.title(f"👤 {st.session_state['username']}")
 if st.sidebar.button("Sair / Logout"):
@@ -85,7 +68,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DO DASHBOARD (MANTIDA DA VERSÃO ANTERIOR)
+# LÓGICA DO DASHBOARD (VERSÃO 7.8 - COM PERÍODO)
 # ==============================================================================
 
 # --- 2. LÓGICA DE NEGÓCIO ---
@@ -160,14 +143,15 @@ def listar_modelos_disponiveis(api_key):
     except:
         return []
 
-def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_empresa, cnpj_empresa):
+def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_empresa, cnpj_empresa, periodo_analise):
     if not api_key: return "⚠️ Insira a chave API."
 
-    contexto = f"Empresa: {nome_empresa} (CNPJ: {cnpj_empresa})"
+    # Inclusão do Período no contexto da IA
+    contexto = f"Empresa: {nome_empresa} (CNPJ: {cnpj_empresa})\nPeríodo Analisado: {periodo_analise}"
     
     prompt = f"""
     {contexto}
-    Atue como Analista Financeiro Sênior. Gere um Relatório Gerencial detalhado.
+    Atue como Analista Financeiro Sênior. Gere um Relatório Gerencial detalhado referente ao período informado.
     
     DADOS APURADOS:
     - Liquidez Corrente: {kpis['Liquidez Corrente']:.2f}
@@ -181,12 +165,12 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     ESTRUTURA OBRIGATÓRIA (Markdown):
     
     # 1. Identificação da empresa analisada
-    [Nome, CNPJ e contexto]
+    [Nome, CNPJ, Período e contexto]
 
     # 2. Índices Financeiros
     ## 2.1 Análise dos índices financeiros detalhada
     [Analise cada índice com profundidade]
-    ## 2.2 Notas explicativas
+    ## 2.2 Notas explicativas simplificadas
     [Glossário curto]
 
     # 3. Análise estruturada
@@ -222,19 +206,25 @@ class PDFReport(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, 'INOVALENIN Solucoes em Tecnologia - 2025', 0, 0, 'C')
 
-def gerar_pdf_final(texto_ia, nome, cnpj):
+def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     pdf = PDFReport()
     pdf.add_page()
     pdf.set_font("Arial", size=10)
+    
+    # Cabeçalho Empresa com Período
     pdf.set_font("Arial", 'B', 11)
-    pdf.cell(0, 8, f"EMPRESA: {nome}", 0, 1)
-    pdf.cell(0, 8, f"CNPJ: {cnpj}", 0, 1)
-    pdf.line(10, 35, 200, 35)
+    pdf.cell(0, 7, f"EMPRESA: {nome}", 0, 1)
+    pdf.cell(0, 7, f"CNPJ: {cnpj}", 0, 1)
+    pdf.cell(0, 7, f"PERIODO: {periodo}", 0, 1) # Nova linha
+    pdf.line(10, 40, 200, 40)
     pdf.ln(10)
+    
+    # Conteúdo da IA
     pdf.set_font("Arial", size=10)
     texto_limpo = texto_ia.replace('**', '').replace('##', '').replace('#', '')
     texto_limpo = texto_limpo.encode('latin-1', 'replace').decode('latin-1')
     pdf.multi_cell(0, 5, texto_limpo)
+    
     return pdf.output(dest='S').encode('latin-1')
 
 # --- 5. EXTRAÇÃO ROBUSTA ---
@@ -246,8 +236,7 @@ def parse_br_currency(valor_str):
         limpo = limpo.replace('.', '').replace(',', '.')
     elif limpo.count('.') == 1 and ',' not in limpo:
         parts = limpo.split('.')
-        if len(parts[-1]) != 2:
-            limpo = limpo.replace('.', '')
+        if len(parts[-1]) != 2: limpo = limpo.replace('.', '')
     elif ',' in limpo:
          limpo = limpo.replace(',', '.')
     try:
@@ -298,25 +287,33 @@ def processar_arquivo(uploaded_file):
     try:
         if uploaded_file.name.endswith('.pdf'):
             with pdfplumber.open(uploaded_file) as pdf:
-                for page in pdf.pages:
-                    texto_full += page.extract_text() + "\n"
+                for page in pdf.pages: texto_full += page.extract_text() + "\n"
         elif uploaded_file.name.endswith(('.xlsx', '.xls')):
             df = pd.read_excel(uploaded_file)
             texto_full = df.to_string()
     except Exception as e:
         st.error(f"Erro ao ler arquivo: {e}")
         return None, None
+    
+    # Extração de Identificação
     nome = "Empresa Analisada"
     match_nome = re.search(r"(?:Nome|Empresa)\s*[:\n-]+\s*(.{5,60})", texto_full, re.IGNORECASE)
     if match_nome: nome = match_nome.group(1).strip().split('\n')[0]
+    
     match_cnpj = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_full)
     cnpj = match_cnpj.group(0) if match_cnpj else ""
+
+    # Extração do Período (Nova Funcionalidade)
+    # Busca por: "Período: 01/2024" ou "Exercício de 2024" ou "Data Base: 31/12/2024"
+    match_periodo = re.search(r"(?:Período|Exercício|Data|Competência)\s*[:\s-]+\s*([\d/\sa-zA-Z]+(?:\d{4}))", texto_full, re.IGNORECASE)
+    periodo = match_periodo.group(1).strip() if match_periodo else ""
+
     v = extrair_dados_texto(texto_full)
     dados = {
         "bp": BalancoPatrimonial(v['ac'], v['anc'], v['pc'], v['pnc'], 0, v['est']),
         "dre": DRE(v['rb'], v['lucro'])
     }
-    return dados, (nome, cnpj)
+    return dados, (nome, cnpj, periodo)
 
 # --- 6. INTERFACE ---
 def main():
@@ -329,6 +326,10 @@ def main():
 
     if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
     if 'relatorio_gerado' not in st.session_state: st.session_state['relatorio_gerado'] = ""
+    # Estado para campos de identificação
+    if 'id_nome' not in st.session_state: st.session_state['id_nome'] = ""
+    if 'id_cnpj' not in st.session_state: st.session_state['id_cnpj'] = ""
+    if 'id_periodo' not in st.session_state: st.session_state['id_periodo'] = ""
 
     with st.sidebar:
         st.header("⚙️ Configurações")
@@ -337,24 +338,32 @@ def main():
         if st.button("🗑️ Limpar / Novo Arquivo", use_container_width=True):
             st.session_state['uploader_key'] += 1
             st.session_state['relatorio_gerado'] = ""
+            st.session_state['id_nome'] = ""
+            st.session_state['id_cnpj'] = ""
+            st.session_state['id_periodo'] = ""
             st.rerun()
         st.markdown("---")
+        
         dados_iniciais = None
-        nome_auto = ""
-        cnpj_auto = ""
         if uploaded_file:
             dados_iniciais, info = processar_arquivo(uploaded_file)
             if dados_iniciais:
-                nome_auto = info[0]
-                cnpj_auto = info[1]
+                # Preenche apenas se estiver vazio (primeira carga)
+                if not st.session_state['id_nome']: st.session_state['id_nome'] = info[0]
+                if not st.session_state['id_cnpj']: st.session_state['id_cnpj'] = info[1]
+                if not st.session_state['id_periodo']: st.session_state['id_periodo'] = info[2]
+        
         st.write("🏢 **Identificação**")
-        if uploaded_file and (not nome_auto or nome_auto == "Empresa Analisada"):
-            st.warning("⚠️ Identificação automática falhou. Preencha abaixo:")
-        nome_final = st.text_input("Razão Social:", value=nome_auto)
-        cnpj_final = st.text_input("CNPJ:", value=cnpj_auto)
+        if uploaded_file and (not st.session_state['id_nome'] or st.session_state['id_nome'] == "Empresa Analisada"):
+            st.warning("⚠️ Identificação incompleta. Preencha:")
+        
+        nome_final = st.text_input("Razão Social:", value=st.session_state['id_nome'])
+        cnpj_final = st.text_input("CNPJ:", value=st.session_state['id_cnpj'])
+        # Novo Campo de Período
+        periodo_final = st.text_input("Período/Exercício:", value=st.session_state['id_periodo'], placeholder="Ex: Jan a Dez 2024")
+        
         st.markdown("---")
         
-        # --- CARREGA CHAVE SECRETA ---
         if "GOOGLE_API_KEY" in st.secrets:
             api_key = st.secrets["GOOGLE_API_KEY"]
             st.success("🔑 IA Conectada.")
@@ -369,7 +378,7 @@ def main():
                 if "flash" in m: model_idx = i; break
         modelo = st.selectbox("Modelo IA:", opcoes, index=model_idx) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 7.7)")
+    st.title("Dashboard Analista Balanço (v 7.8)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto para analisar!** Envie o PDF ou Excel no menu lateral.")
@@ -424,9 +433,13 @@ def main():
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
     if st.button("✨ Gerar Análise Automatizada", type="primary"):
-        if modelo and api_key:
+        # Validação: Obriga a ter período antes de gerar
+        if not periodo_final:
+            st.warning("⚠️ Por favor, informe o PERÍODO/EXERCÍCIO no menu lateral antes de gerar o relatório.")
+        elif modelo and api_key:
             with st.spinner(f"Processando análise para {nome_final}..."):
-                texto_ia = consultar_ia_financeira(api_key, modelo, kpis, dre, nome_final, cnpj_final)
+                # Passa o período para a função
+                texto_ia = consultar_ia_financeira(api_key, modelo, kpis, dre, nome_final, cnpj_final, periodo_final)
                 st.session_state['relatorio_gerado'] = texto_ia
         else:
             st.error("Configure a API Key no menu lateral.")
@@ -434,7 +447,8 @@ def main():
     if st.session_state['relatorio_gerado']:
         with st.container(border=True):
             st.markdown(st.session_state['relatorio_gerado'])
-        pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final)
+        # Passa o período para a função do PDF
+        pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final)
         st.download_button(label="📥 Baixar PDF", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
     st.markdown("""<div class="footer">© INOVALENIN Soluções em Tecnologias - 2025</div>""", unsafe_allow_html=True)
