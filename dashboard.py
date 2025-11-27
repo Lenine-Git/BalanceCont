@@ -15,35 +15,78 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- SISTEMA DE LOGIN ---
+# --- SISTEMA DE LOGIN MULTI-USUÁRIO ---
 def check_password():
+    """Gerencia login comparando com st.secrets"""
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
-    
+        st.session_state['user_role'] = ""
+        st.session_state['username'] = ""
+
     if st.session_state['logged_in']:
         return True
 
+    # Layout de Login
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.markdown("## 🔐 Acesso Restrito - INOVALENIN")
-        st.info("Sistema de Análise Financeira v7.6")
+        st.markdown("## 🔐 Portal do Cliente - INOVALENIN")
+        st.info("Acesso exclusivo para análise de balanços.")
         
-        senha_digitada = st.text_input("Digite a Senha de Acesso:", type="password")
+        usuario = st.text_input("Usuário:", placeholder="Seu usuário de acesso")
+        senha = st.text_input("Senha:", type="password", placeholder="Sua senha")
         
-        if st.button("Entrar", type="primary"):
-            if senha_digitada == "inova2025": 
-                st.session_state['logged_in'] = True
-                st.toast("Login realizado com sucesso!", icon="🔓")
-                time.sleep(0.5)
-                st.rerun()
+        if st.button("Acessar Sistema", type="primary"):
+            # Verifica se os segredos de usuários existem
+            if "credentials" in st.secrets:
+                # Busca o usuário no dicionário de credenciais
+                usuarios_db = st.secrets["credentials"]
+                
+                if usuario in usuarios_db and usuarios_db[usuario] == senha:
+                    st.session_state['logged_in'] = True
+                    st.session_state['username'] = usuario
+                    
+                    # Define se é Admin (Master)
+                    if usuario == "admin_lenine": 
+                        st.session_state['user_role'] = "admin"
+                    else:
+                        st.session_state['user_role'] = "cliente"
+                        
+                    st.toast(f"Bem-vindo, {usuario}!", icon="✅")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("🚫 Usuário ou senha incorretos. Acesso negado.")
             else:
-                st.error("Senha incorreta.")
+                st.error("⚠️ Erro de Configuração: Base de usuários não encontrada no servidor.")
+                
     return False
 
+# Bloqueia execução se não logar
 if not check_password():
     st.stop()
 
-st.sidebar.title("Menu")
+# --- ÁREA DO MASTER (ADMIN) ---
+# Se for o Lenine logado, mostra painel de controle no topo
+if st.session_state['user_role'] == "admin":
+    with st.expander("🛠️ Painel Master (Visível apenas para você)"):
+        st.write(f"Olá, Master. Você está logado como **{st.session_state['username']}**.")
+        st.info("""
+        **Para Gerenciar Usuários (Criar/Bloquear/Resetar):**
+        1. Vá no painel do Streamlit Cloud (share.streamlit.io).
+        2. Clique em **Settings** > **Secrets**.
+        3. Edite a seção `[credentials]`.
+        4. Para **Bloquear**: Apague a linha do usuário.
+        5. Para **Resetar**: Mude a senha na frente do nome.
+        """)
+
+st.sidebar.title(f"👤 {st.session_state['username']}")
+if st.sidebar.button("Sair / Logout"):
+    st.session_state['logged_in'] = False
+    st.rerun()
+
+# ==============================================================================
+# LÓGICA DO DASHBOARD (MANTIDA DA VERSÃO ANTERIOR)
+# ==============================================================================
 
 # --- 2. LÓGICA DE NEGÓCIO ---
 @dataclass
@@ -255,7 +298,8 @@ def processar_arquivo(uploaded_file):
     try:
         if uploaded_file.name.endswith('.pdf'):
             with pdfplumber.open(uploaded_file) as pdf:
-                for page in pdf.pages: texto_full += page.extract_text() + "\n"
+                for page in pdf.pages:
+                    texto_full += page.extract_text() + "\n"
         elif uploaded_file.name.endswith(('.xlsx', '.xls')):
             df = pd.read_excel(uploaded_file)
             texto_full = df.to_string()
@@ -295,7 +339,6 @@ def main():
             st.session_state['relatorio_gerado'] = ""
             st.rerun()
         st.markdown("---")
-        
         dados_iniciais = None
         nome_auto = ""
         cnpj_auto = ""
@@ -304,23 +347,19 @@ def main():
             if dados_iniciais:
                 nome_auto = info[0]
                 cnpj_auto = info[1]
-        
         st.write("🏢 **Identificação**")
         if uploaded_file and (not nome_auto or nome_auto == "Empresa Analisada"):
             st.warning("⚠️ Identificação automática falhou. Preencha abaixo:")
         nome_final = st.text_input("Razão Social:", value=nome_auto)
         cnpj_final = st.text_input("CNPJ:", value=cnpj_auto)
-        
         st.markdown("---")
         
-        # --- LÓGICA DE CHAVE SECRETA (AQUI ESTÁ A MÁGICA) ---
-        # 1. Verifica se existe no secrets do Streamlit Cloud
+        # --- CARREGA CHAVE SECRETA ---
         if "GOOGLE_API_KEY" in st.secrets:
             api_key = st.secrets["GOOGLE_API_KEY"]
-            st.success("🔑 Chave API carregada do sistema seguro.")
+            st.success("🔑 IA Conectada.")
         else:
-            # 2. Se não existir (uso local), pede para digitar
-            api_key = st.text_input("Google API Key", type="password", help="Insira sua chave AIza...")
+            api_key = st.text_input("Google API Key", type="password")
         
         opcoes = []
         model_idx = 0
@@ -330,7 +369,7 @@ def main():
                 if "flash" in m: model_idx = i; break
         modelo = st.selectbox("Modelo IA:", opcoes, index=model_idx) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 7.6)")
+    st.title("Dashboard Analista Balanço (v 7.7)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto para analisar!** Envie o PDF ou Excel no menu lateral.")
