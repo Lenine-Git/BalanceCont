@@ -5,35 +5,32 @@ import pdfplumber
 import google.generativeai as genai
 from dataclasses import dataclass
 from fpdf import FPDF
-import time # Importado para simular carregamento
+import time
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
     page_title="INOVALENIN - Acesso Restrito",
     page_icon="🔒",
     layout="wide",
-    initial_sidebar_state="collapsed" # Começa fechado para focar no login
+    initial_sidebar_state="collapsed"
 )
 
-# --- SISTEMA DE LOGIN SIMPLES ---
+# --- SISTEMA DE LOGIN ---
 def check_password():
-    """Retorna True se o usuário estiver logado"""
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
     
     if st.session_state['logged_in']:
         return True
 
-    # Layout de Login
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.markdown("## 🔐 Acesso Restrito - INOVALENIN")
-        st.info("Sistema de Análise Financeira v7.5")
+        st.info("Sistema de Análise Financeira v7.6")
         
         senha_digitada = st.text_input("Digite a Senha de Acesso:", type="password")
         
         if st.button("Entrar", type="primary"):
-            # SENHA MESTRA - VOCÊ PODE MUDAR AQUI
             if senha_digitada == "inova2025": 
                 st.session_state['logged_in'] = True
                 st.toast("Login realizado com sucesso!", icon="🔓")
@@ -43,20 +40,10 @@ def check_password():
                 st.error("Senha incorreta.")
     return False
 
-# Se não estiver logado, para a execução do script aqui
 if not check_password():
     st.stop()
 
-# ==============================================================================
-# A PARTIR DAQUI, O CÓDIGO É O MESMO DA VERSÃO 7.4 (SÓ RODA SE LOGADO)
-# ==============================================================================
-
-# Restaura o layout normal após login
 st.sidebar.title("Menu")
-
-# ... [COLE AQUI TODO O RESTANTE DO CÓDIGO DA VERSÃO 7.4 ABAIXO] ...
-# ... (Copie do `import dataclasses` para baixo do código anterior e cole aqui) ...
-# Para facilitar, vou colar o código completo e integrado abaixo para você não ter erro de copy-paste.
 
 # --- 2. LÓGICA DE NEGÓCIO ---
 @dataclass
@@ -103,14 +90,18 @@ class AnalistaFinanceiro:
         if lc >= 1.5: score += 20
         elif lc >= 1.0: score += 10
         elif lc < 0.8: score -= 15
+        
         ls = kpis["Liquidez Seca"]
         if ls > 1.0: score += 10
+        
         eg = kpis["Endividamento Geral (%)"]
         if eg < 50: score += 15
         elif eg > 80: score -= 20
+        
         ml = kpis["Margem Líquida (%)"]
         if ml > 10: score += 20
         elif ml < 0: score -= 25
+        
         return min(100, max(0, score))
 
 # --- 3. SERVIÇO DE IA ---
@@ -128,10 +119,13 @@ def listar_modelos_disponiveis(api_key):
 
 def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_empresa, cnpj_empresa):
     if not api_key: return "⚠️ Insira a chave API."
+
     contexto = f"Empresa: {nome_empresa} (CNPJ: {cnpj_empresa})"
+    
     prompt = f"""
     {contexto}
     Atue como Analista Financeiro Sênior. Gere um Relatório Gerencial detalhado.
+    
     DADOS APURADOS:
     - Liquidez Corrente: {kpis['Liquidez Corrente']:.2f}
     - Liquidez Seca: {kpis['Liquidez Seca']:.2f}
@@ -140,14 +134,18 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     - Margem Líquida: {kpis['Margem Líquida (%)']:.1f}%
     - Receita Bruta: R$ {dados_dre.receita_bruta:,.2f}
     - Resultado Líquido: R$ {dados_dre.lucro_liquido:,.2f}
+
     ESTRUTURA OBRIGATÓRIA (Markdown):
+    
     # 1. Identificação da empresa analisada
     [Nome, CNPJ e contexto]
+
     # 2. Índices Financeiros
     ## 2.1 Análise dos índices financeiros detalhada
     [Analise cada índice com profundidade]
     ## 2.2 Notas explicativas
     [Glossário curto]
+
     # 3. Análise estruturada
     ## 3.1 Análise geral
     [Visão macro]
@@ -155,11 +153,13 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     [Bullets]
     ## 3.3 Pontos críticos/inconsistências
     [Bullets]
+
     # 4. Conclusão Técnica
     [Parecer final]
     ## 4.1 Recomendações Técnicas
     [Ações sugeridas]
     """
+
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(modelo_escolhido)
@@ -173,6 +173,7 @@ class PDFReport(FPDF):
         self.set_font('Arial', 'B', 12)
         self.cell(0, 10, 'RELATORIO GERENCIAL DE ANALISE FINANCEIRA', 0, 1, 'C')
         self.ln(5)
+
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
@@ -193,7 +194,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj):
     pdf.multi_cell(0, 5, texto_limpo)
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA (V7.4) ---
+# --- 5. EXTRAÇÃO ROBUSTA ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -223,8 +224,7 @@ def extrair_dados_texto(texto_completo):
             match = pattern.search(texto_alvo)
             if match:
                 trecho_encontrado = match.group(0)
-                if any(bad.upper() in trecho_encontrado.upper() for bad in avoid):
-                    continue
+                if any(bad.upper() in trecho_encontrado.upper() for bad in avoid): continue
                 val_str = match.group(1)
                 if val_str in ['2023', '2024', '2025']: continue
                 val = parse_br_currency(val_str)
@@ -239,8 +239,7 @@ def extrair_dados_texto(texto_completo):
     anc = buscar_valor(["ATIVO NAO CIRCULANTE", "REALIZAVEL A LONGO PRAZO", "PERMANENTE", "IMOBILIZADO"], texto_balanco, avoid=["TOTAL"])
     pnc = buscar_valor(["PASSIVO NAO CIRCULANTE", "EXIGIVEL A LONGO PRAZO"], texto_balanco, avoid=["TOTAL"])
     at_total = buscar_valor(["TOTAL DO ATIVO"], texto_balanco)
-    if at_total > ac and anc < (at_total - ac) * 0.9:
-        anc = at_total - ac
+    if at_total > ac and anc < (at_total - ac) * 0.9: anc = at_total - ac
     rb = buscar_valor(["RECEITA BRUTA", "RECEITA OPERACIONAL BRUTA", "VENDAS DE SERVICOS"], texto_dre)
     lucro = buscar_valor(["LUCRO DO PERIODO", "RESULTADO DO PERIODO", "LUCRO LIQUIDO DO EXERCICIO"], texto_dre)
     if lucro == 0:
@@ -256,8 +255,7 @@ def processar_arquivo(uploaded_file):
     try:
         if uploaded_file.name.endswith('.pdf'):
             with pdfplumber.open(uploaded_file) as pdf:
-                for page in pdf.pages:
-                    texto_full += page.extract_text() + "\n"
+                for page in pdf.pages: texto_full += page.extract_text() + "\n"
         elif uploaded_file.name.endswith(('.xlsx', '.xls')):
             df = pd.read_excel(uploaded_file)
             texto_full = df.to_string()
@@ -291,16 +289,13 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configurações")
         st.info("ℹ️ **Anexar Balanço + DRE em um único arquivo**\nArquivos aceitos: PDF e Excel")
-        uploaded_file = st.file_uploader(
-            "Carregar Arquivo", 
-            type=["pdf", "xlsx", "xls"], 
-            key=f"uploader_{st.session_state['uploader_key']}"
-        )
+        uploaded_file = st.file_uploader("Carregar Arquivo", type=["pdf", "xlsx", "xls"], key=f"uploader_{st.session_state['uploader_key']}")
         if st.button("🗑️ Limpar / Novo Arquivo", use_container_width=True):
             st.session_state['uploader_key'] += 1
             st.session_state['relatorio_gerado'] = ""
             st.rerun()
         st.markdown("---")
+        
         dados_iniciais = None
         nome_auto = ""
         cnpj_auto = ""
@@ -309,13 +304,24 @@ def main():
             if dados_iniciais:
                 nome_auto = info[0]
                 cnpj_auto = info[1]
+        
         st.write("🏢 **Identificação**")
         if uploaded_file and (not nome_auto or nome_auto == "Empresa Analisada"):
             st.warning("⚠️ Identificação automática falhou. Preencha abaixo:")
         nome_final = st.text_input("Razão Social:", value=nome_auto)
         cnpj_final = st.text_input("CNPJ:", value=cnpj_auto)
+        
         st.markdown("---")
-        api_key = st.text_input("Google API Key", type="password")
+        
+        # --- LÓGICA DE CHAVE SECRETA (AQUI ESTÁ A MÁGICA) ---
+        # 1. Verifica se existe no secrets do Streamlit Cloud
+        if "GOOGLE_API_KEY" in st.secrets:
+            api_key = st.secrets["GOOGLE_API_KEY"]
+            st.success("🔑 Chave API carregada do sistema seguro.")
+        else:
+            # 2. Se não existir (uso local), pede para digitar
+            api_key = st.text_input("Google API Key", type="password", help="Insira sua chave AIza...")
+        
         opcoes = []
         model_idx = 0
         if api_key:
@@ -324,15 +330,11 @@ def main():
                 if "flash" in m: model_idx = i; break
         modelo = st.selectbox("Modelo IA:", opcoes, index=model_idx) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 7.5)")
+    st.title("Dashboard Analista Balanço (v 7.6)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto para analisar!** Envie o PDF ou Excel no menu lateral.")
-        st.markdown("""
-        <div class="footer">
-        © INOVALENIN Soluções em Tecnologias - 2025
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("""<div class="footer">© INOVALENIN Soluções em Tecnologias - 2025</div>""", unsafe_allow_html=True)
         st.stop()
 
     st.markdown("### 🔍 Conferência de Dados")
