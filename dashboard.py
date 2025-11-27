@@ -6,6 +6,7 @@ import google.generativeai as genai
 from dataclasses import dataclass
 from fpdf import FPDF
 import time
+from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -15,9 +16,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- SISTEMA DE LOGIN MULTI-USUÁRIO ---
+# --- SISTEMA DE LOGIN ---
 def check_password():
-    """Gerencia login comparando com st.secrets"""
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
         st.session_state['user_role'] = ""
@@ -56,7 +56,6 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- ADMIN PANEL ---
 if st.session_state['user_role'] == "admin":
     with st.expander("🛠️ Painel Master"):
         st.write(f"Logado como: **{st.session_state['username']}**")
@@ -68,7 +67,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DO DASHBOARD (VERSÃO 7.8 - COM PERÍODO)
+# LÓGICA DO DASHBOARD (VERSÃO 7.9)
 # ==============================================================================
 
 # --- 2. LÓGICA DE NEGÓCIO ---
@@ -146,7 +145,6 @@ def listar_modelos_disponiveis(api_key):
 def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_empresa, cnpj_empresa, periodo_analise):
     if not api_key: return "⚠️ Insira a chave API."
 
-    # Inclusão do Período no contexto da IA
     contexto = f"Empresa: {nome_empresa} (CNPJ: {cnpj_empresa})\nPeríodo Analisado: {periodo_analise}"
     
     prompt = f"""
@@ -170,7 +168,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     # 2. Índices Financeiros
     ## 2.1 Análise dos índices financeiros detalhada
     [Analise cada índice com profundidade]
-    ## 2.2 Notas explicativas simplificadas
+    ## 2.2 Notas explicativas
     [Glossário curto]
 
     # 3. Análise estruturada
@@ -211,15 +209,13 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Cabeçalho Empresa com Período
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(0, 7, f"EMPRESA: {nome}", 0, 1)
     pdf.cell(0, 7, f"CNPJ: {cnpj}", 0, 1)
-    pdf.cell(0, 7, f"PERIODO: {periodo}", 0, 1) # Nova linha
+    pdf.cell(0, 7, f"PERIODO: {periodo}", 0, 1)
     pdf.line(10, 40, 200, 40)
     pdf.ln(10)
     
-    # Conteúdo da IA
     pdf.set_font("Arial", size=10)
     texto_limpo = texto_ia.replace('**', '').replace('##', '').replace('#', '')
     texto_limpo = texto_limpo.encode('latin-1', 'replace').decode('latin-1')
@@ -227,7 +223,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA ---
+# --- 5. EXTRAÇÃO ROBUSTA & PERÍODO INTELIGENTE ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -244,6 +240,48 @@ def parse_br_currency(valor_str):
     except:
         return 0.0
 
+def extrair_periodo_inteligente(texto_completo):
+    """
+    Busca datas finais e define o exercício (Ano Inteiro).
+    """
+    # 1. Tenta achar período explícito "01/2024 a 12/2024"
+    match_periodo = re.search(r"(?:Período|Exercício|Competência).*?(\d{2}/\d{2,4}\s+a\s+\d{2}/\d{2,4})", texto_completo, re.IGNORECASE)
+    if match_periodo:
+        return match_periodo.group(1).strip()
+
+    # 2. Se não achou, procura por datas de "Encerramento" ou "Posição em"
+    # Procura datas no formato XX/XX/XXXX
+    datas_encontradas = re.findall(r"(\d{2}/\d{2}/\d{4})", texto_completo)
+    
+    data_encerramento = None
+    
+    # Procura contextos específicos para validar a data
+    termos_encerramento = ["ENCERRADO", "ENCERRAMENTO", "POSIÇÃO EM", "BASE EM", "EM 31 DE"]
+    
+    for termo in termos_encerramento:
+        match_contexto = re.search(f"{termo}.*?(\d{{2}}/\d{{2}}/\d{{4}})", texto_completo, re.IGNORECASE)
+        if match_contexto:
+            data_encerramento = match_contexto.group(1)
+            break
+            
+    # Se não achou contexto, tenta pegar a maior data encontrada no documento (assumindo que seja o fim do exercicio)
+    if not data_encerramento and datas_encontradas:
+        # Filtra datas futuras improváveis ou muito antigas se necessário, aqui pegamos a última válida
+        try:
+            datas_obj = [datetime.strptime(d, "%d/%m/%Y") for d in datas_encontradas]
+            datas_obj.sort()
+            data_final = datas_obj[-1]
+            data_encerramento = data_final.strftime("%d/%m/%Y")
+        except:
+            pass
+
+    # 3. Monta o período anual baseado na data encontrada
+    if data_encerramento:
+        dia, mes, ano = data_encerramento.split('/')
+        return f"01/01/{ano} a {dia}/{mes}/{ano}"
+        
+    return ""
+
 def extrair_dados_texto(texto_completo):
     rx_valor = r"([\d\.,]+)\s*[DC]?" 
     meio_texto = len(texto_completo) // 2
@@ -258,7 +296,8 @@ def extrair_dados_texto(texto_completo):
                 trecho_encontrado = match.group(0)
                 if any(bad.upper() in trecho_encontrado.upper() for bad in avoid): continue
                 val_str = match.group(1)
-                if val_str in ['2023', '2024', '2025']: continue
+                # Filtra anos se forem confundidos com valores
+                if val_str in ['2023', '2024', '2025', '2022']: continue
                 val = parse_br_currency(val_str)
                 if val > 0: return val
         return 0.0
@@ -295,7 +334,6 @@ def processar_arquivo(uploaded_file):
         st.error(f"Erro ao ler arquivo: {e}")
         return None, None
     
-    # Extração de Identificação
     nome = "Empresa Analisada"
     match_nome = re.search(r"(?:Nome|Empresa)\s*[:\n-]+\s*(.{5,60})", texto_full, re.IGNORECASE)
     if match_nome: nome = match_nome.group(1).strip().split('\n')[0]
@@ -303,10 +341,8 @@ def processar_arquivo(uploaded_file):
     match_cnpj = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_full)
     cnpj = match_cnpj.group(0) if match_cnpj else ""
 
-    # Extração do Período (Nova Funcionalidade)
-    # Busca por: "Período: 01/2024" ou "Exercício de 2024" ou "Data Base: 31/12/2024"
-    match_periodo = re.search(r"(?:Período|Exercício|Data|Competência)\s*[:\s-]+\s*([\d/\sa-zA-Z]+(?:\d{4}))", texto_full, re.IGNORECASE)
-    periodo = match_periodo.group(1).strip() if match_periodo else ""
+    # Extração Inteligente do Período
+    periodo = extrair_periodo_inteligente(texto_full)
 
     v = extrair_dados_texto(texto_full)
     dados = {
@@ -326,7 +362,6 @@ def main():
 
     if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
     if 'relatorio_gerado' not in st.session_state: st.session_state['relatorio_gerado'] = ""
-    # Estado para campos de identificação
     if 'id_nome' not in st.session_state: st.session_state['id_nome'] = ""
     if 'id_cnpj' not in st.session_state: st.session_state['id_cnpj'] = ""
     if 'id_periodo' not in st.session_state: st.session_state['id_periodo'] = ""
@@ -348,22 +383,16 @@ def main():
         if uploaded_file:
             dados_iniciais, info = processar_arquivo(uploaded_file)
             if dados_iniciais:
-                # Preenche apenas se estiver vazio (primeira carga)
                 if not st.session_state['id_nome']: st.session_state['id_nome'] = info[0]
                 if not st.session_state['id_cnpj']: st.session_state['id_cnpj'] = info[1]
                 if not st.session_state['id_periodo']: st.session_state['id_periodo'] = info[2]
         
         st.write("🏢 **Identificação**")
-        if uploaded_file and (not st.session_state['id_nome'] or st.session_state['id_nome'] == "Empresa Analisada"):
-            st.warning("⚠️ Identificação incompleta. Preencha:")
-        
         nome_final = st.text_input("Razão Social:", value=st.session_state['id_nome'])
         cnpj_final = st.text_input("CNPJ:", value=st.session_state['id_cnpj'])
-        # Novo Campo de Período
-        periodo_final = st.text_input("Período/Exercício:", value=st.session_state['id_periodo'], placeholder="Ex: Jan a Dez 2024")
+        periodo_final = st.text_input("Período/Exercício:", value=st.session_state['id_periodo'], placeholder="Ex: 01/01/2024 a 31/12/2024")
         
         st.markdown("---")
-        
         if "GOOGLE_API_KEY" in st.secrets:
             api_key = st.secrets["GOOGLE_API_KEY"]
             st.success("🔑 IA Conectada.")
@@ -378,7 +407,7 @@ def main():
                 if "flash" in m: model_idx = i; break
         modelo = st.selectbox("Modelo IA:", opcoes, index=model_idx) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 7.8)")
+    st.title("Dashboard Analista Balanço (v 7.9)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto para analisar!** Envie o PDF ou Excel no menu lateral.")
@@ -389,9 +418,9 @@ def main():
     bp = dados_iniciais['bp']
     dre = dados_iniciais['dre']
     dados_zerados = (bp.ativo_circulante == 0 or bp.passivo_circulante == 0 or dre.receita_bruta == 0)
+    
     if dados_zerados:
-        st.error("⚠️ Atenção: Alguns valores críticos não foram encontrados automaticamente ou estão zerados.")
-        st.info("Por favor, digite os valores corretos abaixo para garantir a precisão dos índices.")
+        st.error("⚠️ Atenção: Alguns valores críticos não foram encontrados automaticamente.")
     
     with st.expander("📝 Editar/Corrigir Valores Extraídos", expanded=dados_zerados):
         col_edit1, col_edit2 = st.columns(2)
@@ -417,10 +446,10 @@ def main():
         st.metric("Score", f"{score}/100")
     with col_kpis:
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Liquidez Corrente", f"{kpis['Liquidez Corrente']:.2f}", help="Ativo Circulante / Passivo Circulante")
-        c2.metric("Liquidez Seca", f"{kpis['Liquidez Seca']:.2f}", help="(Ativo Circulante - Estoques) / Passivo Circulante")
-        c3.metric("Liquidez Geral", f"{kpis['Liquidez Geral']:.2f}", help="(AC + ARLP) / (PC + ELP)")
-        c4.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%", help="Lucro Líquido / Receita Bruta")
+        c1.metric("Liquidez Corrente", f"{kpis['Liquidez Corrente']:.2f}", help="AC / PC")
+        c2.metric("Liquidez Seca", f"{kpis['Liquidez Seca']:.2f}", help="(AC - Est) / PC")
+        c3.metric("Liquidez Geral", f"{kpis['Liquidez Geral']:.2f}", help="(AC+ANC) / (PC+PNC)")
+        c4.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%", help="Lucro / Receita")
 
     with st.expander("📐 Ver Fórmulas Utilizadas"):
         st.markdown("""
@@ -431,14 +460,12 @@ def main():
         """)
 
     st.divider()
-    st.subheader("📝 Relatório de Análise Financeira")
+    st.subheader("Relatório de Análise Financeira")
     if st.button("✨ Gerar Análise Automatizada", type="primary"):
-        # Validação: Obriga a ter período antes de gerar
         if not periodo_final:
-            st.warning("⚠️ Por favor, informe o PERÍODO/EXERCÍCIO no menu lateral antes de gerar o relatório.")
+            st.warning("⚠️ Informe o PERÍODO no menu lateral antes de gerar.")
         elif modelo and api_key:
             with st.spinner(f"Processando análise para {nome_final}..."):
-                # Passa o período para a função
                 texto_ia = consultar_ia_financeira(api_key, modelo, kpis, dre, nome_final, cnpj_final, periodo_final)
                 st.session_state['relatorio_gerado'] = texto_ia
         else:
@@ -447,7 +474,6 @@ def main():
     if st.session_state['relatorio_gerado']:
         with st.container(border=True):
             st.markdown(st.session_state['relatorio_gerado'])
-        # Passa o período para a função do PDF
         pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final)
         st.download_button(label="📥 Baixar PDF", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
