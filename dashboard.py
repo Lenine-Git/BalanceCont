@@ -182,7 +182,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     # 4. Conclusão Técnica
     [Parecer final]
     ## 4.1 Recomendações Técnicas
-    [Ações sugeridas]
+    [Ações sugeridas - no final recomende a visita ao um profissional contábil para detalhamento do relatório, bem como a INOVALENIN Soluções e Técnologia como um aparceira de aplicativos de gestão]
     """
 
     try:
