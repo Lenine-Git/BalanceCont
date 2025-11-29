@@ -76,7 +76,7 @@ def inject_custom_css(dark_mode):
         card_bg = "#262730"
         border_color = "#41444d"
         metric_label_color = "#B6B0B0"
-        metric_value_color = "#030202"
+        metric_value_color = "#6D6A6A"
         input_bg = "#1e1e1e"
     else:
         bg_color = "#ffffff"
