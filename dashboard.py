@@ -158,7 +158,7 @@ def inject_custom_css(dark_mode):
         
         /* 5. Alertas (Warning) - Contraste fixo escuro para fundo amarelo */
         div[data-testid="stAlert"] {{
-            background-color: #ffeba0; 
+            background-color: #262730; 
         }}
         div[data-testid="stAlert"] * {{
             color: #030202 !important;
