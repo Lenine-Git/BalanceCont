@@ -14,7 +14,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Análise v8.0.12",
+    page_title="INOVALENIN - Análise v9.0.0",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -67,21 +67,31 @@ def check_password():
 
 if not check_password(): st.stop()
 
-# --- CSS CUSTOMIZADO (V8.0.12 - UI PROFISSIONAL) ---
+# --- CSS CUSTOMIZADO (V9.0.0 - FIX VISUAL & DARK MODE) ---
 def inject_custom_css(dark_mode):
-    # Definição de Cores Base
-    bg_color = "#0e1117" if dark_mode else "#ffffff"
-    text_color = "#fafafa" if dark_mode else "#31333F"
-    card_bg = "#262730" if dark_mode else "#f0f2f6"
-    border_color = "#41444d" if dark_mode else "#dce0e6"
+    # Lógica de Cores Dinâmica
+    if dark_mode:
+        bg_color = "#0e1117"
+        text_color = "#ffffff"
+        card_bg = "#262730"
+        border_color = "#41444d"
+        metric_value_color = "#ffffff"
+    else:
+        bg_color = "#ffffff"
+        text_color = "#000000" # Preto absoluto para leitura
+        card_bg = "#f0f2f6"
+        border_color = "#dce0e6"
+        metric_value_color = "#000000" # Garante contraste no card claro
     
     css = f"""
     <style>
-        /* 1. Ocultar Elementos do Streamlit (Segurança/Limpeza) */
+        /* 1. Remoção Agressiva de Rodapé e Fullscreen */
         #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
+        footer {{visibility: hidden; display: none !important;}}
         header {{visibility: hidden;}}
-        [data-testid="StyledFullScreenButton"] {{display: none !important;}} /* Oculta Fullscreen imagens */
+        .stDeployButton {{display: none;}}
+        [data-testid="stToolbar"] {{visibility: hidden; display: none !important;}}
+        .viewerBadge_container__1QSob {{display: none !important;}} /* Tenta ocultar badge específica */
         
         /* 2. Abas estilo "Chrome" */
         .stTabs [data-baseweb="tab-list"] {{
@@ -102,22 +112,31 @@ def inject_custom_css(dark_mode):
             background-color: {card_bg} !important;
             border-bottom: 1px solid {card_bg} !important;
             font-weight: bold;
+            color: {text_color} !important;
         }}
         
-        /* 3. Cards de Métricas (Cantos Arredondados e Separação) */
+        /* 3. Cards de Métricas (FIX CONTRASTE) */
         div[data-testid="stMetric"] {{
-            background-color: {card_bg};
-            border: 1px solid {border_color};
+            background-color: {card_bg} !important;
+            border: 1px solid {border_color} !important;
             padding: 15px;
             border-radius: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             text-align: center;
         }}
-        div[data-testid="stMetric"] > div {{
-            width: 100%;
+        
+        /* Força a cor do Rótulo (Label) */
+        div[data-testid="stMetricLabel"] p {{
+            color: {text_color} !important;
+            font-weight: bold;
         }}
         
-        /* Ajuste Geral de Fundo (Se necessário forçar) */
+        /* Força a cor do Valor (Número) */
+        div[data-testid="stMetricValue"] div {{
+            color: {metric_value_color} !important;
+        }}
+        
+        /* Ajuste Geral de Fundo */
         .stApp {{
             background-color: {bg_color};
             color: {text_color};
@@ -265,7 +284,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     except Exception as e:
         return f"Erro IA: {str(e)}"
 
-# --- PDF HEADER FIX (V8.0.12) ---
+# --- PDF HEADER FIX ---
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
@@ -322,13 +341,12 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimon
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Cabeçalho da Empresa (Ajustado Espaçamento)
+    # Cabeçalho da Empresa
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(0, 7, f"EMPRESA: {nome}", 0, 1)
     pdf.cell(0, 7, f"CNPJ: {cnpj}", 0, 1)
-    pdf.ln(4) # AFASTAMENTO SOLICITADO
+    pdf.ln(4)
     pdf.cell(0, 7, f"PERIODO: {periodo}", 0, 1)
-    # Linha separadora dinâmica
     y_line = pdf.get_y()
     pdf.line(10, y_line, 200, y_line)
     pdf.ln(10)
@@ -543,8 +561,8 @@ def main():
         cnpj_final = st.text_input("CNPJ:", value=st.session_state['id_cnpj'])
         periodo_final = st.text_input("Período Atual:", value=st.session_state['id_periodo'])
 
-    # --- TÍTULO ATUALIZADO (v8.0.12) ---
-    st.title("Análise do Balanço e DRE (v 8.0.12)")
+    # --- TÍTULO ATUALIZADO (v9.0.0) ---
+    st.title("Análise do Balanço e DRE (v 9.0.0)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral para iniciar.")
@@ -640,7 +658,7 @@ def main():
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
     
-    # --- BOTÃO "GERAR RELATÓRIO" (SIMPLES, BOLD, SEM ÍCONE) ---
+    # --- BOTÃO "GERAR RELATÓRIO" ---
     if st.button("**Gerar Relatório**", type="primary", use_container_width=False):
         if not periodo_final:
             st.warning("⚠️ Informe o PERÍODO no menu lateral.")
@@ -656,7 +674,7 @@ def main():
             st.markdown(st.session_state['relatorio_gerado'])
         
         pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final, dre, bp)
-        st.download_button(label="📥 Baixar PDF Completo", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
+        st.download_button(label="Baixar PDF Completo", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
 if __name__ == "__main__":
     main()
