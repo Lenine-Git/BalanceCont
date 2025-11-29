@@ -14,7 +14,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Dashboard v8.0.9",
+    page_title="INOVALENIN - Dashboard v8.0.10",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -65,7 +65,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DE NEGÓCIO (VERSÃO 8.0.9)
+# LÓGICA DE NEGÓCIO (VERSÃO 8.0.10)
 # ==============================================================================
 
 @dataclass
@@ -232,18 +232,46 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     except Exception as e:
         return f"Erro IA: {str(e)}"
 
-# --- 4. GERAÇÃO DE PDF COM GRÁFICOS (NOVO v8.0.9) ---
+# --- 4. GERAÇÃO DE PDF COM AVISOS DE SEGURANÇA (ATUALIZADO v8.0.10) ---
 class PDFReport(FPDF):
     def header(self):
+        # Título Principal
         self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'RELATORIO GERENCIAL DE ANALISE FINANCEIRA (DRE + BALANCO)', 0, 1, 'C')
+        self.cell(0, 8, 'RELATORIO GERENCIAL DE ANALISE FINANCEIRA (DRE + BALANCO)', 0, 1, 'C')
+        
+        # Aviso de Beta no Cabeçalho
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(100, 100, 100) # Cinza para destaque sutil
+        aviso_header = "Relatorio gerado pela Rede Neural da INOVALENIN (Versao Beta). Todas as informacoes devem ser conferidas."
+        self.cell(0, 5, aviso_header, 0, 1, 'C')
+        self.set_text_color(0, 0, 0) # Retorna para preto
         self.ln(5)
 
     def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        texto = "Relatorio criado por INOVALENIN Solucoes em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br"
-        self.cell(0, 10, texto, 0, 0, 'C')
+        # Aumentei o espaço do rodapé para caber o texto legal
+        self.set_y(-35) 
+        self.set_font('Arial', 'B', 7)
+        self.cell(0, 4, "AVISO LEGAL:", 0, 1, 'L')
+        
+        self.set_font('Arial', '', 7)
+        disclaimer = (
+            "Este relatorio tem finalidade estritamente gerencial e nao deve ser utilizado para substituir "
+            "demonstracoes contabeis oficiais ou obrigacoes acessorias. O sistema opera atraves de uma rede neural (Google Gemini) "
+            "e pode apresentar imprecisoes. Recomendamos a validacao dos dados por um profissional contabil. "
+        )
+        self.multi_cell(0, 3, disclaimer, 0, 'L')
+        self.ln(2)
+        
+        # Contatos e Copyright
+        contato = (
+            "Acesse www.inovalenin.com.br e veja nossas solucoes em tecnologia. "
+            "Contato: atendimento@inovalenin.com.br | Teremos prazer em atende-lo."
+        )
+        self.multi_cell(0, 3, contato, 0, 'C')
+        self.ln(1)
+        
+        self.set_font('Arial', 'B', 7)
+        self.cell(0, 3, "Copyright 2025 - INOVALENIN Solucoes em Tecnologias", 0, 0, 'C')
 
 def criar_grafico_temp(dados, labels, titulo, cor_base):
     """Gera gráfico usando Matplotlib para embutir no PDF"""
@@ -558,12 +586,15 @@ def main():
         opcoes = listar_modelos_disponiveis(api_key) if api_key else []
         modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 8.0.9)")
+    st.title("Dashboard Analista Balanço (v 8.0.10)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral para iniciar.")
         st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
         st.stop()
+
+    # --- AVISO DE SEGURANÇA (UI) (NOVO v8.0.10) ---
+    st.warning("⚠️ **Aviso de Versão Beta:** Este sistema está em fase de testes e utiliza Inteligência Artificial. As análises geradas devem ser utilizadas com cautela e todas as informações conferidas com os documentos originais antes de qualquer tomada de decisão.", icon="⚠️")
 
     # --- LÓGICA DE DADOS ---
     bp = dados_iniciais['bp']
@@ -676,7 +707,7 @@ def main():
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
     
-    if st.button("✨ Gerar Análise Automatizada (v8.0.9)", type="primary"):
+    if st.button("✨ Gerar Análise Automatizada (v8.0.10)", type="primary"):
         if not periodo_final:
             st.warning("⚠️ Informe o PERÍODO no menu lateral.")
         elif modelo and api_key:
@@ -692,7 +723,7 @@ def main():
         
         # Passa os objetos dre e bp para a função de PDF atualizada
         pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final, dre, bp)
-        st.download_button(label="📥 Baixar PDF Completo (Com Gráficos)", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
+        st.download_button(label="📥 Baixar PDF Completo (Com Gráficos e Avisos)", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
     st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
 
