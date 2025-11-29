@@ -11,7 +11,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Dashboard v8.0.7",
+    page_title="INOVALENIN - Dashboard v8.0.8",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -62,7 +62,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DE NEGÓCIO (VERSÃO 8.0.7)
+# LÓGICA DE NEGÓCIO (VERSÃO 8.0.8)
 # ==============================================================================
 
 @dataclass
@@ -141,7 +141,7 @@ class AnalistaFinanceiro:
         if kpis["Liquidez Corrente"] < 0.8: score -= 15
         return min(100, max(0, score))
 
-# --- 3. SERVIÇO DE IA ---
+# --- 3. SERVIÇO DE IA (ATUALIZADO v8.0.8 - PROMPT COMPARATIVO) ---
 def listar_modelos_disponiveis(api_key):
     try:
         genai.configure(api_key=api_key)
@@ -154,11 +154,35 @@ def listar_modelos_disponiveis(api_key):
     except:
         return []
 
-def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_empresa, cnpj_empresa, periodo_analise):
+def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_empresa, cnpj_empresa, periodo_analise, dre_ant=None, kpis_ant=None):
     if not api_key: return "⚠️ Insira a chave API."
 
     contexto = f"Empresa: {nome_empresa} (CNPJ: {cnpj_empresa})\nPeríodo Analisado: {periodo_analise}"
     
+    # Monta bloco de comparação se existirem dados anteriores
+    bloco_comparativo = ""
+    if dre_ant and kpis_ant:
+        # Cálculo simples de variação percentual para ajudar a IA
+        def calc_var(atual, anterior):
+            if anterior == 0: return 0.0
+            return ((atual - anterior) / anterior) * 100
+
+        var_rec = calc_var(dados_dre.receita_liquida, dre_ant.receita_liquida)
+        var_lucro = calc_var(dados_dre.lucro_liquido, dre_ant.lucro_liquido)
+        var_ebit = calc_var(dados_dre.resultado_operacional, dre_ant.resultado_operacional)
+
+        bloco_comparativo = f"""
+        DADOS HISTÓRICOS (PERÍODO ANTERIOR) PARA COMPARAÇÃO:
+        - Receita Líquida Anterior: R$ {dre_ant.receita_liquida:,.2f} (Variação Atual: {var_rec:+.2f}%)
+        - Lucro Líquido Anterior: R$ {dre_ant.lucro_liquido:,.2f} (Variação Atual: {var_lucro:+.2f}%)
+        - EBIT Anterior: R$ {dre_ant.resultado_operacional:,.2f} (Variação Atual: {var_ebit:+.2f}%)
+        - Margem Líquida Anterior: {kpis_ant['Margem Líquida (%)']:.1f}%
+        
+        INSTRUÇÃO ADICIONAL:
+        - Você DEVE criar uma seção específica comparando os dois períodos.
+        - Analise se a eficiência operacional (margens) melhorou ou piorou, independente do aumento absoluto da receita.
+        """
+
     prompt = f"""
     {contexto}
     Atue como um Analista Financeiro Sênior da INOVALENIN.
@@ -168,9 +192,8 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     - Texto profissional e técnico.
     - Explicite que a análise é gerada pela rede neural da INOVALENIN.
     
-    DADOS APURADOS:
+    DADOS DO PERÍODO ATUAL:
     - Liquidez Corrente: {kpis['Liquidez Corrente']:.2f}
-    - Liquidez Seca: {kpis['Liquidez Seca']:.2f}
     - Liquidez Geral: {kpis['Liquidez Geral']:.2f}
     - Endividamento Geral: {kpis['Endividamento Geral (%)']:.1f}%
     - Receita Líquida: R$ {dados_dre.receita_liquida:,.2f}
@@ -179,24 +202,26 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     - Lucro Líquido: R$ {dados_dre.lucro_liquido:,.2f} (Margem: {kpis['Margem Líquida (%)']:.1f}%)
     - GAO: {kpis['GAO (Alavancagem)']:.2f}
 
+    {bloco_comparativo}
+
     ESTRUTURA OBRIGATÓRIA (Markdown):
     # 1. Identificação e Contexto
     [Cite Nome, CNPJ e Período]
 
-    # 2. Análise da Saúde Financeira
-    ## 2.1 Capacidade de Pagamento (Liquidez)
-    ## 2.2 Estrutura de Capital (Endividamento)
+    # 2. Análise da Saúde Financeira (Liquidez e Endividamento)
+    [Análise focada em solvência]
 
     # 3. Análise de Performance Operacional (DRE)
-    ## 3.1 Eficiência de Custos
-    ## 3.2 Despesas e Resultado Operacional
-    ## 3.3 Resultado Líquido
+    [Análise de margens, custos e lucro]
 
-    # 4. Conclusão Técnica e Recomendações
-    ## 4.1 Plano de Ação Imediato
+    # 4. Análise de Evolução (Comparativo)
+    [Se houver dados anteriores, compare o desempenho. Se não, analise apenas a sustentabilidade atual.]
+
+    # 5. Conclusão Técnica e Recomendações
+    ## 5.1 Plano de Ação Imediato
     
     ---
-    Recomendamos que este relatório seja discutido com a contabilidade da empresa para esclarecimentos mais detalhados. Acesse o site da INOVALENIN (www.inovalenin.com.br) para conhecer mais soluções tecnológicas que auxiliarão na gestão da sua empresa.
+    Recomendamos que este relatório seja discutido com a contabilidade da empresa. Acesse www.inovalenin.com.br.
     """
 
     try:
@@ -238,7 +263,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA (V8.0.5 - PERÍODO CORRIGIDO) ---
+# --- 5. EXTRAÇÃO ROBUSTA ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -402,8 +427,16 @@ def main():
 
     with st.sidebar:
         st.header("⚙️ Configurações")
-        st.info("ℹ️ **Anexar Balanço + DRE**")
-        uploaded_file = st.file_uploader("Arquivo (PDF/Excel)", type=["pdf", "xlsx", "xls"], key=f"uploader_{st.session_state['uploader_key']}")
+        st.info("ℹ️ **Anexar Balanço + DRE (Atual)**")
+        uploaded_file = st.file_uploader("Arquivo Principal (PDF/Excel)", type=["pdf", "xlsx", "xls"], key=f"uploader_{st.session_state['uploader_key']}")
+        
+        # --- COMPARAÇÃO (v8.0.8) ---
+        usar_comparacao = st.checkbox("🔄 Comparar anos anteriores?", help="Habilita upload de um segundo balanço para análise de evolução.")
+        uploaded_file_ant = None
+        if usar_comparacao:
+            uploaded_file_ant = st.file_uploader("Arquivo Ano Anterior (PDF/Excel)", type=["pdf", "xlsx", "xls"], key=f"uploader_ant_{st.session_state['uploader_key']}")
+
+        st.markdown("---")
         
         if st.button("🗑️ Limpar / Nova Análise", use_container_width=True):
             st.session_state['uploader_key'] += 1
@@ -411,8 +444,10 @@ def main():
             for k in ['id_nome', 'id_cnpj', 'id_periodo']: st.session_state[k] = ""
             st.rerun()
         
-        st.markdown("---")
         dados_iniciais = None
+        dados_anterior = None
+        
+        # Processamento Principal
         if uploaded_file:
             dados_iniciais, info = processar_arquivo(uploaded_file)
             if dados_iniciais:
@@ -420,10 +455,14 @@ def main():
                 if not st.session_state['id_cnpj']: st.session_state['id_cnpj'] = info[1]
                 if not st.session_state['id_periodo']: st.session_state['id_periodo'] = info[2]
         
+        # Processamento Anterior
+        if uploaded_file_ant:
+            dados_anterior, _ = processar_arquivo(uploaded_file_ant)
+
         st.write("🏢 **Identificação**")
         nome_final = st.text_input("Razão Social:", value=st.session_state['id_nome'])
         cnpj_final = st.text_input("CNPJ:", value=st.session_state['id_cnpj'])
-        periodo_final = st.text_input("Período:", value=st.session_state['id_periodo'])
+        periodo_final = st.text_input("Período Atual:", value=st.session_state['id_periodo'])
         
         st.markdown("---")
         if "GOOGLE_API_KEY" in st.secrets:
@@ -435,22 +474,31 @@ def main():
         opcoes = listar_modelos_disponiveis(api_key) if api_key else []
         modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 8.0.7)")
+    st.title("Dashboard Analista Balanço (v 8.0.8)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral para iniciar.")
         st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
         st.stop()
 
-    st.markdown("### 🔍 Conferência de Dados (DRE Detalhada)")
+    # --- LÓGICA DE DADOS ---
     bp = dados_iniciais['bp']
     dre = dados_iniciais['dre']
     
+    # Prepara dados anteriores para IA e Gráficos
+    kpis_ant = None
+    dre_ant = None
+    if dados_anterior:
+        dre_ant = dados_anterior['dre']
+        analista_ant = AnalistaFinanceiro(dados_anterior['bp'], dre_ant)
+        kpis_ant = analista_ant.calcular_kpis()
+        st.toast("Dados do ano anterior carregados com sucesso!", icon="📉")
+
     check_zeros = (dre.receita_bruta == 0 or dre.lucro_liquido == 0 or dre.custos == 0)
     if check_zeros:
         st.warning("⚠️ Campos essenciais zerados. Edite abaixo para análise completa.")
 
-    with st.expander("📝 Editar/Corrigir Valores Extraídos", expanded=check_zeros):
+    with st.expander("📝 Editar/Corrigir Valores Extraídos (Período Atual)", expanded=check_zeros):
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown("##### 1. Receita")
@@ -471,14 +519,11 @@ def main():
         with c3:
             st.markdown("##### 3. Resultado & Balanço")
             dre.lucro_liquido = st.number_input("(=) Lucro/Prejuízo Líquido", value=dre.lucro_liquido, format="%.2f")
-            
             st.markdown("---")
             if bp.estoques == 0: st.caption("⚠️ Estoque está zerado. Confirma?")
             bp.estoques = st.number_input("Estoques", value=bp.estoques, format="%.2f")
-            
             if bp.ativo_nao_circulante == 0: st.caption("⚠️ ANC zerado. Confirma?")
             bp.ativo_nao_circulante = st.number_input("Ativo Não Circulante", value=bp.ativo_nao_circulante, format="%.2f")
-            
             bp.passivo_nao_circulante = st.number_input("Passivo Não Circulante", value=bp.passivo_nao_circulante, format="%.2f")
             bp.ativo_circulante = st.number_input("Ativo Circulante", value=bp.ativo_circulante, format="%.2f")
             bp.passivo_circulante = st.number_input("Passivo Circulante", value=bp.passivo_circulante, format="%.2f")
@@ -489,73 +534,76 @@ def main():
 
     st.divider()
     
-    # --- NOVA LÓGICA DE ABAS (v8.0.7) ---
+    # --- ABAS E MÉTRICAS ---
     tab_kpis, tab_graficos = st.tabs(["📊 Indicadores Financeiros", "📈 Visualização Gráfica"])
     
+    # Função auxiliar para Delta na UI
+    def get_delta(chave):
+        if kpis_ant:
+            return kpis[chave] - kpis_ant[chave]
+        return None
+
     with tab_kpis:
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Liquidez Corrente", f"{kpis['Liquidez Corrente']:.2f}")
-        c2.metric("Liquidez Seca", f"{kpis['Liquidez Seca']:.2f}")
-        c3.metric("Liquidez Geral", f"{kpis['Liquidez Geral']:.2f}")
+        c1.metric("Liquidez Corrente", f"{kpis['Liquidez Corrente']:.2f}", delta=get_delta("Liquidez Corrente"))
+        c2.metric("Liquidez Seca", f"{kpis['Liquidez Seca']:.2f}", delta=get_delta("Liquidez Seca"))
+        c3.metric("Liquidez Geral", f"{kpis['Liquidez Geral']:.2f}", delta=get_delta("Liquidez Geral"))
         c4.metric("Score", f"{score}/100")
 
-        st.markdown("##### Performance & Rentabilidade (Análise Vertical)")
+        st.markdown("##### Performance & Rentabilidade")
         d1, d2, d3, d4, d5 = st.columns(5)
-        d1.metric("Margem Bruta", f"{kpis['Margem Bruta (%)']:.1f}%", help="Lucro Bruto / Rec. Líquida")
-        d2.metric("Margem Operacional", f"{kpis['Margem Operacional (%)']:.1f}%", help="EBIT / Rec. Líquida")
-        d3.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%", help="Lucro Líquido / Rec. Líquida")
-        d4.metric("GAO (Alavancagem)", f"{kpis['GAO (Alavancagem)']:.2f}", help="Lucro Bruto / EBIT")
-        d5.metric("Peso Desp. Oper.", f"{kpis['Índice Desp. Operacionais (%)']:.1f}%", help="Despesas / Rec. Líquida")
+        d1.metric("Margem Bruta", f"{kpis['Margem Bruta (%)']:.1f}%", help="Lucro Bruto / Rec. Líquida", delta=get_delta("Margem Bruta (%)"))
+        d2.metric("Margem Operacional", f"{kpis['Margem Operacional (%)']:.1f}%", help="EBIT / Rec. Líquida", delta=get_delta("Margem Operacional (%)"))
+        d3.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%", help="Lucro Líquido / Rec. Líquida", delta=get_delta("Margem Líquida (%)"))
+        d4.metric("GAO (Alavancagem)", f"{kpis['GAO (Alavancagem)']:.2f}", help="Lucro Bruto / EBIT", delta=get_delta("GAO (Alavancagem)"))
+        d5.metric("Peso Desp. Oper.", f"{kpis['Índice Desp. Operacionais (%)']:.1f}%", help="Despesas / Rec. Líquida", delta=get_delta("Índice Desp. Operacionais (%)"), delta_color="inverse")
 
-        with st.expander("📐 Ver Fórmulas e Notas (Valores Reais)"):
-            st.markdown(f"""
-            **Cálculo Transparente:**
-            * **Liquidez Corrente:** $\\frac{{{bp.ativo_circulante:,.2f}}}{{{bp.passivo_circulante:,.2f}}} = {kpis['Liquidez Corrente']:.2f}$
-            * **Margem Líquida:** $\\frac{{{dre.lucro_liquido:,.2f}}}{{{dre.receita_bruta:,.2f}}} \\times 100 = {kpis['Margem Líquida (%)']:.2f}\\%$
-            """)
+        with st.expander("📐 Ver Fórmulas e Notas"):
+            st.markdown(f"**Liquidez Corrente:** AC / PC = {kpis['Liquidez Corrente']:.2f}")
 
     with tab_graficos:
         st.subheader("Análise Visual da Empresa")
         col_g1, col_g2 = st.columns(2)
         
-        # Gráfico 1: Estrutura da DRE
+        # Gráfico DRE
         df_dre_vis = pd.DataFrame({
             'Categoria': ['Receita Líquida', 'Custos', 'Lucro Bruto', 'Despesas Op.', 'Lucro Líquido'],
-            'Valor': [dre.receita_liquida, dre.custos, dre.lucro_bruto, dre.despesas_operacionais, dre.lucro_liquido]
+            'Valor': [dre.receita_liquida, dre.custos, dre.lucro_bruto, dre.despesas_operacionais, dre.lucro_liquido],
+            'Tipo': ['Positivo', 'Negativo', 'Resultado', 'Negativo', 'Resultado']
         })
+        color_scale = alt.Scale(domain=['Positivo', 'Negativo', 'Resultado'], range=['#2E86C1', '#C0392B', '#27AE60'])
+        
         chart_dre = alt.Chart(df_dre_vis).mark_bar().encode(
-            x=alt.X('Categoria', sort=None),
-            y='Valor',
-            color=alt.condition(
-                alt.datum.Valor > 0,
-                alt.value("steelblue"),  # Positive color
-                alt.value("orange")      # Negative color
-            ),
-            tooltip=['Categoria', 'Valor']
+            x=alt.X('Categoria', sort=None, title=None),
+            y=alt.Y('Valor', title='R$'),
+            color=alt.Color('Tipo', scale=color_scale, legend=None),
+            tooltip=[alt.Tooltip('Categoria'), alt.Tooltip('Valor', format=',.2f')]
         ).properties(title="Estrutura de Resultados (DRE)")
         col_g1.altair_chart(chart_dre, use_container_width=True)
         
-        # Gráfico 2: Estrutura Patrimonial (Simplificada)
+        # Gráfico Balanço
         df_bp_vis = pd.DataFrame({
             'Grupo': ['Ativo Circulante', 'Passivo Circulante', 'Ativo Total', 'Passivo Total'],
             'Valor': [bp.ativo_circulante, bp.passivo_circulante, bp.ativo_total, bp.passivo_total]
         })
         chart_bp = alt.Chart(df_bp_vis).mark_bar().encode(
-            x=alt.X('Grupo', sort=None),
-            y='Valor',
-            color=alt.value("green"),
-            tooltip=['Grupo', 'Valor']
-        ).properties(title="Liquidez e Estrutura")
+            x=alt.X('Grupo', sort=None, title=None),
+            y=alt.Y('Valor', title='R$'),
+            color=alt.value("#8E44AD"),
+            tooltip=[alt.Tooltip('Grupo'), alt.Tooltip('Valor', format=',.2f')]
+        ).properties(title="Liquidez e Estrutura Patrimonial")
         col_g2.altair_chart(chart_bp, use_container_width=True)
 
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
-    if st.button("✨ Gerar Análise Automatizada (v8.0.7)", type="primary"):
+    
+    if st.button("✨ Gerar Análise Automatizada (v8.0.8)", type="primary"):
         if not periodo_final:
             st.warning("⚠️ Informe o PERÍODO no menu lateral.")
         elif modelo and api_key:
-            with st.spinner(f"A Rede Neural INOVALENIN está analisando {nome_final}..."):
-                texto_ia = consultar_ia_financeira(api_key, modelo, kpis, dre, nome_final, cnpj_final, periodo_final)
+            with st.spinner(f"A Rede Neural INOVALENIN está comparando dados de {nome_final}..."):
+                # Passa kpis_ant e dre_ant para a função de IA atualizada
+                texto_ia = consultar_ia_financeira(api_key, modelo, kpis, dre, nome_final, cnpj_final, periodo_final, dre_ant, kpis_ant)
                 st.session_state['relatorio_gerado'] = texto_ia
         else:
             st.error("Erro de API Key.")
