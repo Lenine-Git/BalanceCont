@@ -10,7 +10,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Dashboard Financeiro v8.0",
+    page_title="INOVALENIN - Dashboard Financeiro v8.0.1",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -63,7 +63,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DO DASHBOARD (VERSÃO 8.0 - DRE PROFUNDA)
+# LÓGICA DO DASHBOARD (VERSÃO 8.0.1 - UNIFICADA)
 # ==============================================================================
 
 # --- 2. LÓGICA DE NEGÓCIO ---
@@ -96,35 +96,37 @@ class AnalistaFinanceiro:
         self.dre = dre
 
     def calcular_kpis(self):
-        # --- BALANÇO ---
+        # --- CÁLCULOS DO BALANÇO (Base v7.9) ---
         pc = self.bp.passivo_circulante if self.bp.passivo_circulante > 0 else 1.0
+        
+        # Passivo Total Exigível (PC + ELP)
         passivo_exigivel = pc + self.bp.passivo_nao_circulante
         if passivo_exigivel == 0: passivo_exigivel = 1.0
+
         at = self.bp.ativo_total if self.bp.ativo_total > 0 else 1.0
         
-        # --- DRE INDICADORES ---
+        # --- CÁLCULOS DA DRE (Base v8.0) ---
         rb = self.dre.receita_bruta if self.dre.receita_bruta > 0 else 1.0
         rl = self.dre.receita_liquida if self.dre.receita_liquida > 0 else 1.0
         lb = self.dre.lucro_bruto
         ro = self.dre.resultado_operacional
         
-        # Graus de Alavancagem Operacional (GAO) = Lucro Bruto / Resultado Operacional
-        # Cuidado com divisão por zero ou números negativos que distorcem o GAO
+        # GAO (Grau de Alavancagem Operacional)
         gao = 0.0
         if ro > 0:
             gao = lb / ro
 
-        # Índice de Despesas Operacionais = Desp. Operacionais / Receita Líquida
+        # Índice de Despesas Operacionais
         ind_desp = (self.dre.despesas_operacionais / rl) * 100
 
         return {
-            # BP Indices
+            # --- Índices de Liquidez & Solvência (v7.9) ---
             "Liquidez Corrente": self.bp.ativo_circulante / pc,
             "Liquidez Seca": (self.bp.ativo_circulante - self.bp.estoques) / pc,
             "Liquidez Geral": (self.bp.ativo_circulante + self.bp.ativo_nao_circulante) / passivo_exigivel,
             "Endividamento Geral (%)": (passivo_exigivel / at) * 100,
             
-            # DRE Indices (Novos v8.0)
+            # --- Índices de Rentabilidade & Performance (v8.0) ---
             "Margem Bruta (%)": (lb / rl) * 100,
             "Margem Operacional (%)": (ro / rl) * 100,
             "Margem Líquida (%)": (self.dre.lucro_liquido / rl) * 100,
@@ -134,18 +136,19 @@ class AnalistaFinanceiro:
 
     def gerar_score(self, kpis):
         score = 50
-        # Regras BP
+        # Regras de Liquidez (Peso alto)
         if kpis["Liquidez Corrente"] >= 1.0: score += 15
-        if kpis["Endividamento Geral (%)"] < 60: score += 15
+        if kpis["Liquidez Geral"] >= 1.0: score += 10
+        if kpis["Endividamento Geral (%)"] < 60: score += 10
         
-        # Regras DRE
+        # Regras de Rentabilidade
         if kpis["Margem Líquida (%)"] > 10: score += 10
         if kpis["Margem Bruta (%)"] > 30: score += 10
         if kpis["Margem Operacional (%)"] > 10: score += 10
         
-        # Penalidades
+        # Penalidades Críticas
         if kpis["Margem Líquida (%)"] < 0: score -= 20
-        if kpis["Liquidez Corrente"] < 0.8: score -= 10
+        if kpis["Liquidez Corrente"] < 0.8: score -= 15
         
         return min(100, max(0, score))
 
@@ -167,51 +170,54 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
 
     contexto = f"Empresa: {nome_empresa} (CNPJ: {cnpj_empresa})\nPeríodo Analisado: {periodo_analise}"
     
+    # --- PROMPT V8.0.1 (FUSÃO DE CONTEXTOS) ---
     prompt = f"""
     {contexto}
     Atue como um Analista Financeiro Sênior da INOVALENIN.
-    Gere um Relatório Gerencial Detalhado (DRE e Balanço).
+    Sua tarefa é gerar um Relatório Gerencial detalhado com base nos dados fornecidos.
     
-    DADOS DO BALANÇO:
+    DIRETRIZES DE TOM E ESTILO:
+    - O texto deve ser profissional, direto e técnico, mas acessível a gestores.
+    - Evite soar robótico. Use conectivos e frases bem construídas.
+    - Deixe explícito no início que esta análise foi gerada automaticamente pela rede neural da INOVALENIN.
+    
+    DADOS APURADOS - BALANÇO (Liquidez e Solvência):
     - Liquidez Corrente: {kpis['Liquidez Corrente']:.2f}
+    - Liquidez Seca: {kpis['Liquidez Seca']:.2f}
+    - Liquidez Geral: {kpis['Liquidez Geral']:.2f}
     - Endividamento Geral: {kpis['Endividamento Geral (%)']:.1f}%
-    
-    DADOS DA DRE (PERFORMANCE):
-    - Receita Bruta: R$ {dados_dre.receita_bruta:,.2f}
-    - (-) Deduções: R$ {dados_dre.deducoes:,.2f}
-    - (=) Receita Líquida: R$ {dados_dre.receita_liquida:,.2f}
-    - (-) Custos (CMV/CPV): R$ {dados_dre.custos:,.2f}
-    - (=) Lucro Bruto: R$ {dados_dre.lucro_bruto:,.2f} (Margem: {kpis['Margem Bruta (%)']:.1f}%)
-    - (-) Despesas Operacionais: R$ {dados_dre.despesas_operacionais:,.2f}
-    - (=) Resultado Operacional: R$ {dados_dre.resultado_operacional:,.2f} (Margem: {kpis['Margem Operacional (%)']:.1f}%)
-    - (=) Lucro Líquido: R$ {dados_dre.lucro_liquido:,.2f} (Margem: {kpis['Margem Líquida (%)']:.1f}%)
-    - GAO (Alavancagem): {kpis['GAO (Alavancagem)']:.2f}
 
-    ESTRUTURA OBRIGATÓRIA (Markdown):
+    DADOS APURADOS - DRE (Performance Operacional):
+    - Receita Bruta: R$ {dados_dre.receita_bruta:,.2f}
+    - Receita Líquida: R$ {dados_dre.receita_liquida:,.2f}
+    - Lucro Bruto: R$ {dados_dre.lucro_bruto:,.2f} (Margem Bruta: {kpis['Margem Bruta (%)']:.1f}%)
+    - Resultado Operacional: R$ {dados_dre.resultado_operacional:,.2f} (Margem Operacional: {kpis['Margem Operacional (%)']:.1f}%)
+    - Resultado Líquido: R$ {dados_dre.lucro_liquido:,.2f} (Margem Líquida: {kpis['Margem Líquida (%)']:.1f}%)
+    - GAO (Alavancagem Operacional): {kpis['GAO (Alavancagem)']:.2f}
+
+    ESTRUTURA OBRIGATÓRIA DO RELATÓRIO (Markdown):
     
     # 1. Identificação e Contexto
-    [Confirme que é uma análise automática da rede neural INOVALENIN. Identifique a empresa e o período]
+    [Inicie confirmando que este relatório é uma análise automática da INOVALENIN. Cite Nome, CNPJ e Período]
 
-    # 2. Análise Vertical da DRE (Detalhamento)
-    ## 2.1 Eficiência de Custos
-    [Analise a proporção de Deduções e Custos sobre a Receita. O Lucro Bruto está saudável?]
+    # 2. Análise da Saúde Financeira (Balanço Patrimonial)
+    ## 2.1 Capacidade de Pagamento (Liquidez)
+    [Analise a Liquidez Corrente, Seca e Geral. A empresa paga suas contas no curto e longo prazo? Há dependência de estoques?]
     
-    ## 2.2 Peso das Despesas Operacionais
-    [Analise o impacto das despesas administrativas/comerciais sobre o Lucro Bruto. A empresa é pesada?]
+    ## 2.2 Estrutura de Capital (Endividamento)
+    [Analise o Endividamento Geral. O capital é próprio ou de terceiros? O risco de insolvência é alto?]
 
-    ## 2.3 Capacidade de Geração de Caixa (EBITDA/Operacional)
-    [Comente sobre o Resultado Operacional e a Margem Operacional]
+    # 3. Análise de Performance e Rentabilidade (DRE)
+    ## 3.1 Eficiência Operacional
+    [Analise a Margem Bruta e Operacional. Os custos e despesas estão controlados em relação à receita?]
+    
+    ## 3.2 Resultado Líquido e Retorno
+    [Analise a Margem Líquida final. A operação vale a pena? O GAO indica alto risco de alavancagem?]
 
-    # 3. Indicadores de Balanço e Solvência
-    [Breve análise de Liquidez e Endividamento]
-
-    # 4. Análise de Alavancagem e Retorno
-    [Explique o GAO encontrado. A empresa tem alto risco operacional?]
-
-    # 5. Conclusão Técnica e Recomendações
-    [Parecer final sintético]
-    ## 5.1 Plano de Ação
-    [3 ações para melhorar margens ou reduzir despesas]
+    # 4. Conclusão Técnica e Recomendações
+    [Parecer final sintético unindo Balanço e DRE]
+    ## 4.1 Plano de Ação Imediato
+    [3 sugestões práticas para melhorar os indicadores críticos encontrados]
     
     ---
     Recomendamos que este relatório seja discutido com a contabilidade da empresa para esclarecimentos mais detalhados. Acesse o site da INOVALENIN (www.inovalenin.com.br) para conhecer mais soluções tecnológicas que auxiliarão na gestão da sua empresa.
@@ -228,7 +234,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'RELATORIO DE ANALISE FINANCEIRA (DRE + BP)', 0, 1, 'C')
+        self.cell(0, 10, 'RELATORIO DE ANALISE FINANCEIRA (DRE + BALANCO)', 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
@@ -256,7 +262,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA (DRE EXPANDIDA) ---
+# --- 5. EXTRAÇÃO ROBUSTA ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -281,14 +287,12 @@ def extrair_periodo_inteligente(texto_completo):
 def extrair_dados_texto(texto_completo):
     rx_valor = r"([\d\.,]+)\s*[DC]?" 
     
-    # Divide texto para evitar confusão Balanço x DRE
     meio = len(texto_completo) // 2
     txt_bp = texto_completo[:int(len(texto_completo)*0.6)]
     txt_dre = texto_completo[int(len(texto_completo)*0.4):]
 
     def buscar(labels, texto_alvo, avoid=[]):
         for label in labels:
-            # Regex que busca na mesma linha ou linhas próximas
             pattern = re.compile(f"{label}.*?{rx_valor}", re.IGNORECASE | re.DOTALL)
             match = pattern.search(texto_alvo)
             if match:
@@ -300,7 +304,7 @@ def extrair_dados_texto(texto_completo):
                 if val > 0: return val
         return 0.0
 
-    # --- BALANÇO ---
+    # --- BALANÇO (v7.9 Logic) ---
     ac = buscar(["ATIVO CIRCULANTE"], txt_bp, avoid=["TOTAL", "PASSIVO"]) or buscar(["Total do Ativo Circulante"], txt_bp)
     pc = buscar(["PASSIVO CIRCULANTE"], txt_bp, avoid=["TOTAL", "ATIVO"]) or buscar(["Total do Passivo Circulante"], txt_bp)
     est = buscar(["ESTOQUES", "MERCADORIAS", "ESTOQUE FINAL"], txt_bp)
@@ -309,31 +313,17 @@ def extrair_dados_texto(texto_completo):
     at = buscar(["TOTAL DO ATIVO"], txt_bp)
     if at > ac and anc < (at - ac)*0.9: anc = at - ac
 
-    # --- DRE DETALHADA (V8.0) ---
+    # --- DRE (v8.0 Logic) ---
     rb = buscar(["RECEITA BRUTA", "RECEITA OPERACIONAL BRUTA"], txt_dre)
-    
-    # Deduções (Impostos/Devoluções)
-    ded = buscar(["DEDUCOES DA RECEITA", "IMPOSTOS SOBRE VENDAS", "SIMPLES NACIONAL", "ICMS SOBRE VENDAS"], txt_dre)
-    
-    # Receita Liquida (Se não achar, calcula)
+    ded = buscar(["DEDUCOES DA RECEITA", "IMPOSTOS SOBRE VENDAS", "SIMPLES NACIONAL"], txt_dre)
     rl = buscar(["RECEITA LIQUIDA"], txt_dre)
     if rl == 0 and rb > 0: rl = rb - ded
-    
-    # Custos (CMV/CPV/CSP)
-    custos = buscar(["CUSTO DAS MERCADORIAS", "CUSTO DOS PRODUTOS", "CUSTO DOS SERVICOS", "CPV", "CMV", "CSP"], txt_dre)
-    
-    # Lucro Bruto (Se não achar, calcula)
+    custos = buscar(["CUSTO DAS MERCADORIAS", "CUSTO DOS PRODUTOS", "CUSTO DOS SERVICOS", "CPV", "CMV"], txt_dre)
     lb = buscar(["LUCRO BRUTO", "RESULTADO BRUTO"], txt_dre)
     if lb == 0: lb = rl - custos
-    
-    # Despesas Operacionais (Geralmente é um totalizador ou soma de Adm + Com)
     desp_op = buscar(["DESPESAS OPERACIONAIS", "TOTAL DAS DESPESAS"], txt_dre)
-    
-    # Resultado Operacional (EBITDA aproximado ou EBIT)
     res_op = buscar(["RESULTADO OPERACIONAL", "LUCRO OPERACIONAL"], txt_dre)
     if res_op == 0: res_op = lb - desp_op
-    
-    # Lucro Líquido
     ll = buscar(["LUCRO DO PERIODO", "LUCRO LIQUIDO DO EXERCICIO"], txt_dre)
     if ll == 0:
         prej = buscar(["PREJUIZO DO PERIODO"], txt_dre)
@@ -368,7 +358,6 @@ def processar_arquivo(uploaded_file):
     
     v = extrair_dados_texto(texto_full)
     
-    # Monta objetos ricos (V8.0)
     dados = {
         "bp": BalancoPatrimonial(v['ac'], v['anc'], v['pc'], v['pnc'], 0, v['est']),
         "dre": DRE(
@@ -396,7 +385,6 @@ def main():
     if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
     if 'relatorio_gerado' not in st.session_state: st.session_state['relatorio_gerado'] = ""
     
-    # Estados de Identificação
     for k in ['id_nome', 'id_cnpj', 'id_periodo']:
         if k not in st.session_state: st.session_state[k] = ""
 
@@ -435,14 +423,13 @@ def main():
         opcoes = listar_modelos_disponiveis(api_key) if api_key else []
         modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 8.0)")
+    st.title("Dashboard Analista Balanço (v 8.0.1)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral.")
         st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
         st.stop()
 
-    # --- ÁREA DE CONFERÊNCIA E EDIÇÃO (AGORA COM DRE COMPLETA) ---
     st.markdown("### 🔍 Conferência de Dados (DRE Detalhada)")
     
     bp = dados_iniciais['bp']
@@ -450,7 +437,7 @@ def main():
     
     check_zeros = (dre.receita_bruta == 0 or dre.lucro_liquido == 0 or dre.custos == 0)
     if check_zeros:
-        st.warning("⚠️ Alguns campos da DRE não foram detectados. Preencha abaixo para habilitar os índices avançados.")
+        st.warning("⚠️ Campos da DRE zerados. Edite abaixo para análise completa.")
 
     with st.expander("📝 Editar/Corrigir Valores Extraídos (Clique para abrir)", expanded=check_zeros):
         c1, c2, c3 = st.columns(3)
@@ -458,69 +445,60 @@ def main():
             st.markdown("##### 1. Receita")
             dre.receita_bruta = st.number_input("Receita Bruta", value=dre.receita_bruta, format="%.2f")
             dre.deducoes = st.number_input("(-) Deduções", value=dre.deducoes, format="%.2f")
-            # Receita Liquida é calculada ou ajustada
             val_rl = dre.receita_bruta - dre.deducoes
-            st.caption(f"Receita Líquida Calc: {val_rl:,.2f}")
+            st.caption(f"RL Calc: {val_rl:,.2f}")
             dre.receita_liquida = st.number_input("Receita Líquida (Oficial)", value=(dre.receita_liquida if dre.receita_liquida > 0 else val_rl), format="%.2f")
         
         with c2:
             st.markdown("##### 2. Custos & Despesas")
             dre.custos = st.number_input("(-) Custos (CMV/CPV)", value=dre.custos, format="%.2f")
             dre.despesas_operacionais = st.number_input("(-) Despesas Operacionais", value=dre.despesas_operacionais, format="%.2f")
-            # Lucro Bruto Calc
             val_lb = dre.receita_liquida - dre.custos
-            st.caption(f"Lucro Bruto Calc: {val_lb:,.2f}")
+            st.caption(f"LB Calc: {val_lb:,.2f}")
             dre.lucro_bruto = st.number_input("Lucro Bruto (Oficial)", value=(dre.lucro_bruto if dre.lucro_bruto != 0 else val_lb), format="%.2f")
 
         with c3:
-            st.markdown("##### 3. Resultado")
-            dre.resultado_operacional = st.number_input("Resultado Operacional (EBIT)", value=dre.resultado_operacional, format="%.2f")
+            st.markdown("##### 3. Resultado & Balanço")
+            dre.resultado_operacional = st.number_input("Resultado Operacional", value=dre.resultado_operacional, format="%.2f")
             dre.lucro_liquido = st.number_input("(=) Lucro/Prejuízo Líquido", value=dre.lucro_liquido, format="%.2f")
-            
             st.markdown("---")
-            st.markdown("**Balanço Resumido**")
             bp.ativo_circulante = st.number_input("Ativo Circ.", value=bp.ativo_circulante, format="%.2f")
             bp.passivo_circulante = st.number_input("Passivo Circ.", value=bp.passivo_circulante, format="%.2f")
             bp.estoques = st.number_input("Estoques", value=bp.estoques, format="%.2f")
 
-    # Recalcula índices com dados novos
     analista = AnalistaFinanceiro(bp, dre)
     kpis = analista.calcular_kpis()
     score = analista.gerar_score(kpis)
 
-    # --- DASHBOARD DE INDICADORES ---
     st.divider()
     st.subheader("📊 Indicadores Financeiros")
     
-    # Linha 1: Balanço (Liquidez)
+    # Balanço (v7.9)
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Liquidez Corrente", f"{kpis['Liquidez Corrente']:.2f}")
     c2.metric("Liquidez Seca", f"{kpis['Liquidez Seca']:.2f}")
-    c3.metric("Endividamento Geral", f"{kpis['Endividamento Geral (%)']:.1f}%")
-    c4.metric("Score de Crédito", f"{score}/100")
+    c3.metric("Liquidez Geral", f"{kpis['Liquidez Geral']:.2f}")
+    c4.metric("Score", f"{score}/100")
 
-    # Linha 2: DRE (Rentabilidade - NOVO!)
+    # DRE (v8.0)
     st.markdown("##### Performance & Rentabilidade (Análise Vertical)")
     d1, d2, d3, d4, d5 = st.columns(5)
-    
-    d1.metric("Margem Bruta", f"{kpis['Margem Bruta (%)']:.1f}%", help="Lucro Bruto / Rec. Líquida")
-    d2.metric("Margem Operacional", f"{kpis['Margem Operacional (%)']:.1f}%", help="Res. Operacional / Rec. Líquida")
-    d3.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%", help="Lucro Líquido / Rec. Líquida")
-    d4.metric("GAO (Alavancagem)", f"{kpis['GAO (Alavancagem)']:.2f}", help="Lucro Bruto / Lucro Operacional")
-    d5.metric("Peso Desp. Oper.", f"{kpis['Índice Desp. Operacionais (%)']:.1f}%", help="Despesas / Rec. Líquida")
+    d1.metric("Margem Bruta", f"{kpis['Margem Bruta (%)']:.1f}%")
+    d2.metric("Margem Operacional", f"{kpis['Margem Operacional (%)']:.1f}%")
+    d3.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%")
+    d4.metric("GAO (Alavancagem)", f"{kpis['GAO (Alavancagem)']:.2f}")
+    d5.metric("Peso Desp. Oper.", f"{kpis['Índice Desp. Operacionais (%)']:.1f}%")
 
     with st.expander("📐 Ver Fórmulas e Notas Explicativas"):
         st.markdown("""
-        **Indicadores de DRE (Novos):**
-        * **Margem Bruta:** Eficiência da produção/aquisição. Quanto sobra após pagar o custo direto.
-        * **Margem Operacional:** Eficiência da operação. Quanto sobra após pagar custos + despesas (aluguel, pessoal, energia).
-        * **GAO (Grau de Alavancagem Operacional):** Mede o risco operacional. Se alto, um aumento nas vendas gera grande aumento no lucro, mas uma queda nas vendas gera grande prejuízo.
-        * **Peso Desp. Operacionais:** Quanto da receita é consumido para manter a empresa aberta (custos fixos).
+        * **Liquidez Geral:** $\\frac{\\text{AC} + \\text{ANC}}{\\text{Passivo Total Exigível}}$
+        * **Margem Bruta:** Eficiência da produção/aquisição.
+        * **GAO:** Sensibilidade do lucro em relação à variação das vendas.
         """)
 
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
-    if st.button("✨ Gerar Análise Automatizada (v8.0)", type="primary"):
+    if st.button("✨ Gerar Análise Automatizada (v8.0.1)", type="primary"):
         if not periodo_final:
             st.warning("⚠️ Informe o PERÍODO no menu lateral.")
         elif modelo and api_key:
