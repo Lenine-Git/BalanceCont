@@ -10,7 +10,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Dashboard v8.0.6",
+    page_title="INOVALENIN - Dashboard v8.0.6 (Corrigido)",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -61,7 +61,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DE NEGÓCIO (VERSÃO 8.0.6)
+# LÓGICA DE NEGÓCIO (VERSÃO 8.0.6 - COM CORREÇÃO DE PERÍODO)
 # ==============================================================================
 
 @dataclass
@@ -180,7 +180,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
 
     ESTRUTURA OBRIGATÓRIA (Markdown):
     # 1. Identificação e Contexto
-    [Cite Nome, CNPJ e Período]
+    [Cite Nome, CNPJ e Período CORRETO: {periodo_analise}]
 
     # 2. Análise da Saúde Financeira
     ## 2.1 Capacidade de Pagamento (Liquidez)
@@ -209,7 +209,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'RELATORIO DE ANALISE FINANCEIRA (DRE + BALANCO)', 0, 1, 'C')
+        self.cell(0, 10, 'RELATORIO GERENCIAL DE ANALISE FINANCEIRA (DRE + BALANCO)', 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
@@ -237,7 +237,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA (V8.0.6 - LUCRO REFORÇADO) ---
+# --- 5. EXTRAÇÃO ROBUSTA (V8.0.5 - PERÍODO RESTAURADO E CORRIGIDO) ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -255,29 +255,47 @@ def parse_br_currency(valor_str):
         return 0.0
 
 def extrair_periodo_inteligente(texto_completo):
-    match_periodo = re.search(r"(?:Período|Exercício|Competência).*?(\d{2}/\d{2,4}\s+a\s+\d{2}/\d{2,4})", texto_completo, re.IGNORECASE)
-    if match_periodo: return match_periodo.group(1).strip()
+    """
+    Lógica de Período v8.0.5 (RESTAURADA):
+    Ignora datas de Junta Comercial/Fundação e prioriza 'Período' explícito ou datas de encerramento.
+    """
+    # 1. Busca Explícita por "Período: MM/AAAA" ou "Período: AAAA"
+    # Captura: "Período : 12 / 2024" ou "Período: 2024"
+    match_periodo = re.search(r"(?:Período|Exercício|Competência)\s*[:\s-]+\s*((?:\d{1,2}[\/\s]+)?\d{4})", texto_completo, re.IGNORECASE)
     
-    datas = re.findall(r"(\d{2}/\d{2}/\d{4})", texto_completo)
-    termos = ["ENCERRADO", "ENCERRAMENTO", "POSIÇÃO EM", "BASE EM", "EM"]
-    data_final = None
-    
-    for termo in termos:
-        m = re.search(f"{termo}.*?(\d{{2}}/\d{{2}}/\d{{4}})", texto_completo, re.IGNORECASE)
-        if m: 
-            data_final = m.group(1)
-            break
-            
-    if not data_final and datas:
-        try:
-            datas_obj = [datetime.strptime(d, "%d/%m/%Y") for d in datas]
-            datas_obj.sort()
-            data_final = datas_obj[-1].strftime("%d/%m/%Y")
-        except: pass
+    if match_periodo:
+        data_bruta = match_periodo.group(1).replace(" ", "").replace("/", "")
+        
+        # Se for formato MMAAAA (ex: 122024)
+        if len(data_bruta) >= 6: 
+            ano = data_bruta[-4:]
+            return f"01/01/{ano} a 31/12/{ano}"
+        # Se for só AAAA (ex: 2024)
+        elif len(data_bruta) == 4:
+            return f"01/01/{data_bruta} a 31/12/{data_bruta}"
 
-    if data_final:
-        ano = data_final.split('/')[-1]
-        return f"01/01/{ano} a {data_final}"
+    # 2. Se não achou explícito, busca datas de Encerramento (evitando Junta Comercial)
+    linhas = texto_completo.split('\n')
+    for linha in linhas:
+        # Filtro de ruído: Pula linha se tiver palavra chave de registro
+        if any(x in linha.upper() for x in ["JUNTA", "NIRE", "FUNDAÇÃO", "EMISSÃO", "IMPRESSÃO", "CONSTITUIÇÃO"]):
+            continue 
+            
+        # Procura data padrão 31/12/XXXX (Típica de Balanço Anual)
+        match_data = re.search(r"31/12/(\d{4})", linha)
+        if match_data:
+            ano = match_data.group(1)
+            return f"01/01/{ano} a 31/12/{ano}"
+
+    # 3. Último recurso: Pega o maior ano encontrado no documento (com cuidado)
+    anos = re.findall(r"\b20[1-3]\d\b", texto_completo) # Anos entre 2010 e 2039
+    if anos:
+        # Filtra anos futuros improváveis e pega o mais frequente ou o maior
+        anos = [int(a) for a in anos if int(a) <= datetime.now().year + 1]
+        if anos:
+            ano_provavel = max(anos)
+            return f"01/01/{ano_provavel} a 31/12/{ano_provavel}"
+
     return ""
 
 def extrair_dados_texto(texto_completo):
@@ -294,11 +312,13 @@ def extrair_dados_texto(texto_completo):
                 trecho = match.group(0)
                 if any(bad.upper() in trecho.upper() for bad in avoid): continue
                 val_str = match.group(1)
+                # Filtra anos se forem confundidos com valores
                 if val_str in ['2023', '2024', '2025']: continue
                 val = parse_br_currency(val_str)
                 if val > 0: return val
         return 0.0
 
+    # Lógica de extração mantida (Funcionando bem)
     ac = buscar_valor(["ATIVO CIRCULANTE"], txt_bp, avoid=["TOTAL", "PASSIVO"]) or buscar_valor(["Total do Ativo Circulante"], txt_bp)
     pc = buscar_valor(["PASSIVO CIRCULANTE"], txt_bp, avoid=["TOTAL", "ATIVO"]) or buscar_valor(["Total do Passivo Circulante"], txt_bp)
     est = buscar_valor(["ESTOQUES", "MERCADORIAS", "ESTOQUE FINAL"], txt_bp)
@@ -307,37 +327,14 @@ def extrair_dados_texto(texto_completo):
     at = buscar_valor(["TOTAL DO ATIVO"], txt_bp)
     if at > ac and anc < (at - ac)*0.9: anc = at - ac
 
-    rb = buscar_valor(["RECEITA BRUTA", "RECEITA OPERACIONAL BRUTA"], txt_dre)
-    ded = buscar_valor(["DEDUCOES DA RECEITA", "IMPOSTOS SOBRE VENDAS", "SIMPLES NACIONAL"], txt_dre)
-    rl = buscar_valor(["RECEITA LIQUIDA"], txt_dre)
-    if rl == 0 and rb > 0: rl = rb - ded
-    custos = buscar_valor(["CUSTO DAS MERCADORIAS", "CUSTO DOS PRODUTOS", "CUSTO DOS SERVICOS", "CPV", "CMV"], txt_dre)
-    lb = buscar_valor(["LUCRO BRUTO", "RESULTADO BRUTO"], txt_dre)
-    if lb == 0: lb = rl - custos
-    desp_op = buscar_valor(["DESPESAS OPERACIONAIS", "TOTAL DAS DESPESAS"], txt_dre)
-    res_op = buscar_valor(["RESULTADO OPERACIONAL", "LUCRO OPERACIONAL"], txt_dre)
-    
-    # Busca de Lucro Reforçada (V8.0.6)
-    ll = buscar_valor(["LUCRO DO PERIODO", "LUCRO LIQUIDO DO EXERCICIO"], txt_dre)
-    if ll == 0:
-        # Tenta pegar a ultima linha de valor da DRE (heuristicamente)
-        linhas_dre = txt_dre.split('\n')
-        for linha in reversed(linhas_dre):
-            if "LUCRO" in linha.upper() or "RESULTADO" in linha.upper():
-                m = re.search(rx_valor, linha)
-                if m:
-                    ll = parse_br_currency(m.group(1))
-                    break
-    
-    if ll == 0:
-        prej = buscar_valor(["PREJUIZO DO PERIODO"], txt_dre)
-        if prej > 0: ll = -prej
-
-    return {
-        "ac": ac, "anc": anc, "pc": pc, "pnc": pnc, "est": est, 
-        "rb": rb, "ded": ded, "rl": rl, "custos": custos, 
-        "lb": lb, "desp_op": desp_op, "res_op": res_op, "ll": ll
-    }
+    rb = buscar_valor(["RECEITA BRUTA", "RECEITA OPERACIONAL BRUTA", "VENDAS DE SERVICOS"], txt_dre)
+    lucro = buscar_valor(["LUCRO DO PERIODO", "RESULTADO DO PERIODO", "LUCRO LIQUIDO DO EXERCICIO"], txt_dre)
+    if lucro == 0:
+        prej = buscar_valor(["PREJUIZO DO PERIODO", "PREJUIZO DO EXERCICIO"], txt_dre)
+        if prej > 0: lucro = -prej
+    if lucro == 0:
+        lucro = buscar_valor(["LUCRO LIQUIDO", "RESULTADO LIQUIDO"], txt_dre, avoid=["ACUMULADO", "ANTERIOR"])
+    return {"ac": ac, "anc": anc, "pc": pc, "pnc": pnc, "est": est, "rb": rb, "lucro": lucro}
 
 def processar_arquivo(uploaded_file):
     if uploaded_file is None: return None, None
@@ -358,9 +355,12 @@ def processar_arquivo(uploaded_file):
     if match_nome: nome = match_nome.group(1).strip().split('\n')[0]
     match_cnpj = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_full)
     cnpj = match_cnpj.group(0) if match_cnpj else ""
+    
+    # Extração de Período Corrigida (usando a função restaurada)
     periodo = extrair_periodo_inteligente(texto_full)
     
     v = extrair_dados_texto(texto_full)
+    
     dados = {
         "bp": BalancoPatrimonial(v['ac'], v['anc'], v['pc'], v['pnc'], 0, v['est']),
         "dre": DRE(
@@ -455,29 +455,19 @@ def main():
             st.markdown("##### 2. Custos & Despesas")
             dre.custos = st.number_input("(-) Custos (CMV/CPV)", value=dre.custos, format="%.2f")
             val_lb = dre.receita_liquida - dre.custos
-            st.caption(f"Lucro Bruto Calc: {val_lb:,.2f}")
+            st.caption(f"LB Calc: {val_lb:,.2f}")
             dre.lucro_bruto = st.number_input("Lucro Bruto (Oficial)", value=(dre.lucro_bruto if dre.lucro_bruto != 0 else val_lb), format="%.2f")
             dre.despesas_operacionais = st.number_input("(-) Despesas Operacionais", value=dre.despesas_operacionais, format="%.2f")
             
-            # EBIT oculto (v8.0.6) - Calculado mas não mostrado em metric
             ebit_calc = dre.lucro_bruto - dre.despesas_operacionais
 
         with c3:
             st.markdown("##### 3. Resultado & Balanço")
             dre.lucro_liquido = st.number_input("(=) Lucro/Prejuízo Líquido", value=dre.lucro_liquido, format="%.2f")
-            
             st.markdown("---")
-            
-            # Mensagem de alerta se zerado (v8.0.6)
-            if bp.estoques == 0: st.caption("⚠️ Estoque está zerado. Confirma?")
+            bp.ativo_circulante = st.number_input("Ativo Circ.", value=bp.ativo_circulante, format="%.2f")
+            bp.passivo_circulante = st.number_input("Passivo Circ.", value=bp.passivo_circulante, format="%.2f")
             bp.estoques = st.number_input("Estoques", value=bp.estoques, format="%.2f")
-            
-            if bp.ativo_nao_circulante == 0: st.caption("⚠️ ANC zerado. Confirma?")
-            bp.ativo_nao_circulante = st.number_input("Ativo Não Circulante", value=bp.ativo_nao_circulante, format="%.2f")
-            
-            bp.passivo_nao_circulante = st.number_input("Passivo Não Circulante", value=bp.passivo_nao_circulante, format="%.2f")
-            bp.ativo_circulante = st.number_input("Ativo Circulante", value=bp.ativo_circulante, format="%.2f")
-            bp.passivo_circulante = st.number_input("Passivo Circulante", value=bp.passivo_circulante, format="%.2f")
 
     analista = AnalistaFinanceiro(bp, dre)
     kpis = analista.calcular_kpis()
@@ -494,24 +484,17 @@ def main():
 
     st.markdown("##### Performance & Rentabilidade (Análise Vertical)")
     d1, d2, d3, d4, d5 = st.columns(5)
-    d1.metric("Margem Bruta", f"{kpis['Margem Bruta (%)']:.1f}%")
-    d2.metric("Margem Operacional", f"{kpis['Margem Operacional (%)']:.1f}%")
-    d3.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%")
-    d4.metric("GAO", f"{kpis['GAO (Alavancagem)']:.2f}")
-    d5.metric("Peso Desp. Oper.", f"{kpis['Índice Desp. Operacionais (%)']:.1f}%")
+    d1.metric("Margem Bruta", f"{kpis['Margem Bruta (%)']:.1f}%", help="Lucro Bruto / Rec. Líquida")
+    d2.metric("Margem Operacional", f"{kpis['Margem Operacional (%)']:.1f}%", help="EBIT / Rec. Líquida")
+    d3.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%", help="Lucro Líquido / Rec. Líquida")
+    d4.metric("GAO (Alavancagem)", f"{kpis['GAO (Alavancagem)']:.2f}", help="Lucro Bruto / EBIT")
+    d5.metric("Peso Desp. Oper.", f"{kpis['Índice Desp. Operacionais (%)']:.1f}%", help="Despesas / Rec. Líquida")
 
-    # EXPANDER DE FÓRMULAS COM VALORES REAIS (V8.0.6)
-    with st.expander("📐 Ver Fórmulas e Valores Calculados (Conferência)"):
+    with st.expander("📐 Ver Fórmulas e Notas (Valores Reais)"):
         st.markdown(f"""
-        **Cálculo Transparente:**
-        
         * **Liquidez Corrente:** $\\frac{{{bp.ativo_circulante:,.2f}}}{{{bp.passivo_circulante:,.2f}}} = {kpis['Liquidez Corrente']:.2f}$
-        
         * **Liquidez Seca:** $\\frac{{{bp.ativo_circulante:,.2f} - {bp.estoques:,.2f}}}{{{bp.passivo_circulante:,.2f}}} = {kpis['Liquidez Seca']:.2f}$
-        
         * **Liquidez Geral:** $\\frac{{{bp.ativo_total:,.2f}}}{{{bp.passivo_circulante + bp.passivo_nao_circulante:,.2f}}} = {kpis['Liquidez Geral']:.2f}$
-        
-        * **Margem Líquida:** $\\frac{{{dre.lucro_liquido:,.2f}}}{{{dre.receita_bruta:,.2f}}} \\times 100 = {kpis['Margem Líquida (%)']:.2f}\\%$
         """)
 
     st.divider()
