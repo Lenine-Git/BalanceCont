@@ -1,3 +1,22 @@
+"""
+================================================================================
+PROJETO: BalanceCont Dashboard - Análise Financeira com IA
+VERSÃO: 9.0.3
+DATA: 2025
+AUTORIA: INOVALENIN Soluções em Tecnologias
+PROGRAMADOR SENIOR: Paulo Lenine e Equipe
+CONTATO: atendimento@inovalenin.com.br
+
+DESCRIÇÃO:
+Sistema de análise de Balanços Patrimoniais e DREs utilizando OCR em PDFs,
+Cálculo de KPIs financeiros e Inteligência Artificial (Google Gemini) para
+geração de relatórios gerenciais automatizados.
+
+PROPRIEDADE INTELECTUAL:
+Este código é propriedade exclusiva da INOVALENIN. A cópia, distribuição ou
+modificação não autorizada é estritamente proibida sem consentimento prévio.
+================================================================================
+"""
 import streamlit as st
 import pandas as pd
 import re
