@@ -10,7 +10,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Dashboard v8.0.4",
+    page_title="INOVALENIN - Dashboard v8.0.5",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -61,7 +61,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DE NEGÓCIO (VERSÃO 8.0.4)
+# LÓGICA DE NEGÓCIO
 # ==============================================================================
 
 @dataclass
@@ -81,10 +81,10 @@ class DRE:
     receita_bruta: float = 0.0
     deducoes: float = 0.0
     receita_liquida: float = 0.0
-    custos: float = 0.0 # CMV / CPV / CSP
+    custos: float = 0.0 
     lucro_bruto: float = 0.0
     despesas_operacionais: float = 0.0
-    resultado_operacional: float = 0.0 # EBIT
+    resultado_operacional: float = 0.0
     lucro_liquido: float = 0.0
 
 class AnalistaFinanceiro:
@@ -103,8 +103,6 @@ class AnalistaFinanceiro:
             
         rl = self.dre.receita_liquida if self.dre.receita_liquida > 0 else 1.0
         lb = self.dre.lucro_bruto
-        
-        # Recálculo EBIT (v8.0.3)
         ro = lb - self.dre.despesas_operacionais
         self.dre.resultado_operacional = ro
         
@@ -159,47 +157,36 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     Atue como um Analista Financeiro Sênior da INOVALENIN.
     Sua tarefa é gerar um Relatório Gerencial detalhado com base nos dados fornecidos.
     
-    DIRETRIZES DE TOM E ESTILO:
-    - O texto deve ser profissional, direto e técnico, mas acessível a gestores.
-    - Evite soar robótico. Use conectivos e frases bem construídas.
-    - Deixe explícito no início que esta análise foi gerada automaticamente pela rede neural da INOVALENIN.
+    DIRETRIZES:
+    - Texto profissional e técnico.
+    - Explicite que a análise é gerada pela rede neural da INOVALENIN.
     
-    DADOS APURADOS - BALANÇO:
+    DADOS APURADOS:
     - Liquidez Corrente: {kpis['Liquidez Corrente']:.2f}
     - Liquidez Seca: {kpis['Liquidez Seca']:.2f}
     - Liquidez Geral: {kpis['Liquidez Geral']:.2f}
     - Endividamento Geral: {kpis['Endividamento Geral (%)']:.1f}%
-
-    DADOS APURADOS - DRE:
     - Receita Líquida: R$ {dados_dre.receita_liquida:,.2f}
     - Lucro Bruto: R$ {dados_dre.lucro_bruto:,.2f} (Margem: {kpis['Margem Bruta (%)']:.1f}%)
-    - Despesas Operacionais: R$ {dados_dre.despesas_operacionais:,.2f}
     - Resultado Operacional (EBIT): R$ {dados_dre.resultado_operacional:,.2f} (Margem: {kpis['Margem Operacional (%)']:.1f}%)
     - Lucro Líquido: R$ {dados_dre.lucro_liquido:,.2f} (Margem: {kpis['Margem Líquida (%)']:.1f}%)
     - GAO: {kpis['GAO (Alavancagem)']:.2f}
 
     ESTRUTURA OBRIGATÓRIA (Markdown):
     # 1. Identificação e Contexto
-    [Inicie confirmando que este relatório é uma análise automática da INOVALENIN. Cite Nome, CNPJ e Período]
+    [Cite Nome, CNPJ e Período]
 
-    # 2. Análise da Saúde Financeira (Balanço Patrimonial)
+    # 2. Análise da Saúde Financeira
     ## 2.1 Capacidade de Pagamento (Liquidez)
-    [Analise Liquidez.]
     ## 2.2 Estrutura de Capital (Endividamento)
-    [Analise Endividamento.]
 
     # 3. Análise de Performance Operacional (DRE)
     ## 3.1 Eficiência de Custos
-    [Analise Margem Bruta.]
     ## 3.2 Despesas e Resultado Operacional
-    [Analise o impacto das despesas e o EBIT.]
     ## 3.3 Resultado Líquido
-    [Analise Margem Líquida.]
 
     # 4. Conclusão Técnica e Recomendações
-    [Parecer final]
     ## 4.1 Plano de Ação Imediato
-    [3 sugestões]
     
     ---
     Recomendamos que este relatório seja discutido com a contabilidade da empresa para esclarecimentos mais detalhados. Acesse o site da INOVALENIN (www.inovalenin.com.br) para conhecer mais soluções tecnológicas que auxiliarão na gestão da sua empresa.
@@ -244,7 +231,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA (V8.0.4 - PERÍODO CORRIGIDO) ---
+# --- 5. EXTRAÇÃO ROBUSTA (V8.0.5 - PERÍODO CORRIGIDO) ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -263,55 +250,49 @@ def parse_br_currency(valor_str):
 
 def extrair_periodo_inteligente(texto_completo):
     """
-    Lógica aprimorada para forçar período anual (01/01 a 31/12)
-    quando detecta fechamento de exercício.
+    Lógica v8.0.5: Prioriza 'Período' explícito e ignora datas de Junta Comercial/Fundação.
     """
-    # 1. Procura datas indicativas de fim de ano (31/12 ou 12/20XX)
-    # Regex para 31/12/XXXX ou 12/XXXX
-    match_fim_ano = re.search(r"(?:31/12/|31.12.|12/|Dezembro de\s)(\d{4})", texto_completo, re.IGNORECASE)
+    # 1. Busca Explícita por "Período: MM/AAAA" ou "Período: AAAA"
+    # Captura: "Período : 12 / 2024" ou "Período: 2024"
+    match_periodo = re.search(r"(?:Período|Exercício|Competência)\s*[:\s-]+\s*((?:\d{1,2}[\/\s]+)?\d{4})", texto_completo, re.IGNORECASE)
     
-    if match_fim_ano:
-        ano = match_fim_ano.group(1)
-        # Se achou indício de Dezembro, assume ano completo
-        return f"01/01/{ano} a 31/12/{ano}"
+    if match_periodo:
+        data_bruta = match_periodo.group(1).replace(" ", "").replace("/", "")
+        
+        # Se for formato MMAAAA (ex: 122024)
+        if len(data_bruta) >= 6: 
+            ano = data_bruta[-4:]
+            return f"01/01/{ano} a 31/12/{ano}"
+        # Se for só AAAA (ex: 2024)
+        elif len(data_bruta) == 4:
+            return f"01/01/{data_bruta} a 31/12/{data_bruta}"
 
-    # 2. Se não achou Dezembro, procura qualquer data de "Encerramento" ou "Posição"
-    datas = re.findall(r"(\d{2}/\d{2}/\d{4})", texto_completo)
-    termos = ["ENCERRADO", "ENCERRAMENTO", "POSIÇÃO EM", "BASE EM", "EM"]
-    data_final = None
-    
-    for termo in termos:
-        m = re.search(f"{termo}.*?(\d{{2}}/\d{{2}}/\d{{4}})", texto_completo, re.IGNORECASE)
-        if m: 
-            data_final = m.group(1)
-            break
+    # 2. Se não achou explícito, busca datas de Encerramento (evitando Junta Comercial)
+    # Ignora linhas com "Junta", "NIRE", "Fundação"
+    linhas = texto_completo.split('\n')
+    for linha in linhas:
+        if any(x in linha.upper() for x in ["JUNTA", "NIRE", "FUNDAÇÃO", "EMISSÃO", "IMPRESSÃO"]):
+            continue # Pula linha que tem data irrelevante
             
-    # 3. Fallback: Maior data encontrada (com filtro de ano razoável)
-    if not data_final and datas:
-        try:
-            datas_obj = []
-            for d in datas:
-                try:
-                    dt = datetime.strptime(d, "%d/%m/%Y")
-                    # Filtra datas absurdas
-                    if 2000 < dt.year < 2030: datas_obj.append(dt)
-                except: pass
-            
-            if datas_obj:
-                datas_obj.sort()
-                data_final = datas_obj[-1].strftime("%d/%m/%Y")
-        except: pass
+        # Procura data padrão 31/12/XXXX
+        match_data = re.search(r"31/12/(\d{4})", linha)
+        if match_data:
+            ano = match_data.group(1)
+            return f"01/01/{ano} a 31/12/{ano}"
 
-    # 4. Formatação Final: Sempre começa em 01/01 do ano encontrado
-    if data_final:
-        ano = data_final.split('/')[-1]
-        return f"01/01/{ano} a {data_final}"
-    
+    # 3. Último recurso: Pega o maior ano encontrado no documento (com cuidado)
+    anos = re.findall(r"\b20[1-3]\d\b", texto_completo) # Anos entre 2010 e 2039
+    if anos:
+        # Filtra anos futuros improváveis e pega o mais frequente ou o maior
+        anos = [int(a) for a in anos if int(a) <= datetime.now().year + 1]
+        if anos:
+            ano_provavel = max(anos)
+            return f"01/01/{ano_provavel} a 31/12/{ano_provavel}"
+
     return ""
 
 def extrair_dados_texto(texto_completo):
     rx_valor = r"([\d\.,]+)\s*[DC]?" 
-    
     meio = len(texto_completo) // 2
     txt_bp = texto_completo[:int(len(texto_completo)*0.6)]
     txt_dre = texto_completo[int(len(texto_completo)*0.4):]
@@ -378,23 +359,12 @@ def processar_arquivo(uploaded_file):
     match_cnpj = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_full)
     cnpj = match_cnpj.group(0) if match_cnpj else ""
     
-    # EXTRAÇÃO DE PERÍODO (Lógica v8.0.4)
     periodo = extrair_periodo_inteligente(texto_full)
     
     v = extrair_dados_texto(texto_full)
-    
     dados = {
         "bp": BalancoPatrimonial(v['ac'], v['anc'], v['pc'], v['pnc'], 0, v['est']),
-        "dre": DRE(
-            receita_bruta=v['rb'], 
-            deducoes=v['ded'],
-            receita_liquida=v['rl'],
-            custos=v['custos'],
-            lucro_bruto=v['lb'],
-            despesas_operacionais=v['desp_op'],
-            resultado_operacional=v['res_op'],
-            lucro_liquido=v['ll']
-        )
+        "dre": DRE(v['rb'], v['ded'], v['rl'], v['custos'], v['lb'], v['desp_op'], v['res_op'], v['ll'])
     }
     return dados, (nome, cnpj, periodo)
 
@@ -409,7 +379,6 @@ def main():
 
     if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
     if 'relatorio_gerado' not in st.session_state: st.session_state['relatorio_gerado'] = ""
-    
     for k in ['id_nome', 'id_cnpj', 'id_periodo']:
         if k not in st.session_state: st.session_state[k] = ""
 
@@ -448,7 +417,7 @@ def main():
         opcoes = listar_modelos_disponiveis(api_key) if api_key else []
         modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 8.0.4)")
+    st.title("Dashboard Analista Balanço (v 8.0.5)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral.")
@@ -456,7 +425,6 @@ def main():
         st.stop()
 
     st.markdown("### 🔍 Conferência de Dados (DRE Detalhada)")
-    
     bp = dados_iniciais['bp']
     dre = dados_iniciais['dre']
     
@@ -473,7 +441,6 @@ def main():
             val_rl = dre.receita_bruta - dre.deducoes
             st.caption(f"RL Calc: {val_rl:,.2f}")
             dre.receita_liquida = st.number_input("Receita Líquida (Oficial)", value=(dre.receita_liquida if dre.receita_liquida > 0 else val_rl), format="%.2f")
-        
         with c2:
             st.markdown("##### 2. Custos & Despesas")
             dre.custos = st.number_input("(-) Custos (CMV/CPV)", value=dre.custos, format="%.2f")
@@ -481,10 +448,8 @@ def main():
             st.caption(f"LB Calc: {val_lb:,.2f}")
             dre.lucro_bruto = st.number_input("Lucro Bruto (Oficial)", value=(dre.lucro_bruto if dre.lucro_bruto != 0 else val_lb), format="%.2f")
             dre.despesas_operacionais = st.number_input("(-) Despesas Operacionais", value=dre.despesas_operacionais, format="%.2f")
-            
             ebit_calc = dre.lucro_bruto - dre.despesas_operacionais
             st.metric("EBIT (Calculado)", f"{ebit_calc:,.2f}")
-
         with c3:
             st.markdown("##### 3. Resultado & Balanço")
             dre.lucro_liquido = st.number_input("(=) Lucro/Prejuízo Líquido", value=dre.lucro_liquido, format="%.2f")
@@ -499,11 +464,10 @@ def main():
 
     st.divider()
     st.subheader("📊 Indicadores Financeiros")
-    
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Liquidez Corrente", f"{kpis['Liquidez Corrente']:.2f}")
-    c2.metric("Liquidez Geral", f"{kpis['Liquidez Geral']:.2f}")
-    c3.metric("Endividamento Geral", f"{kpis['Endividamento Geral (%)']:.1f}%")
+    c2.metric("Liquidez Seca", f"{kpis['Liquidez Seca']:.2f}")
+    c3.metric("Liquidez Geral", f"{kpis['Liquidez Geral']:.2f}")
     c4.metric("Score", f"{score}/100")
 
     st.markdown("##### Performance & Rentabilidade (Análise Vertical)")
@@ -511,19 +475,15 @@ def main():
     d1.metric("Margem Bruta", f"{kpis['Margem Bruta (%)']:.1f}%")
     d2.metric("Margem Operacional", f"{kpis['Margem Operacional (%)']:.1f}%")
     d3.metric("Margem Líquida", f"{kpis['Margem Líquida (%)']:.1f}%")
-    d4.metric("GAO (Alavancagem)", f"{kpis['GAO (Alavancagem)']:.2f}")
+    d4.metric("GAO", f"{kpis['GAO (Alavancagem)']:.2f}")
     d5.metric("Peso Desp. Oper.", f"{kpis['Índice Desp. Operacionais (%)']:.1f}%")
 
     with st.expander("📐 Ver Fórmulas e Notas"):
-        st.markdown("""
-        * **Liquidez Geral:** $\\frac{\\text{AC} + \\text{ANC}}{\\text{Passivo Total Exigível}}$
-        * **Margem Bruta:** $\\frac{\\text{Lucro Bruto}}{\\text{Rec. Líquida}}$
-        * **GAO:** $\\frac{\\text{Lucro Bruto}}{\\text{Lucro Operacional}}$
-        """)
+        st.markdown("""* **Liquidez Geral:** $\\frac{\\text{AC} + \\text{ANC}}{\\text{Passivo Total Exigível}}$ * **Margem Bruta:** $\\frac{\\text{Lucro Bruto}}{\\text{Rec. Líquida}}$ * **GAO:** $\\frac{\\text{Lucro Bruto}}{\\text{Lucro Operacional}}$""")
 
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
-    if st.button("✨ Gerar Análise Automatizada (v8.0.4)", type="primary"):
+    if st.button("✨ Gerar Análise Automatizada (v8.0.5)", type="primary"):
         if not periodo_final:
             st.warning("⚠️ Informe o PERÍODO no menu lateral.")
         elif modelo and api_key:
