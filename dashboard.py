@@ -72,7 +72,7 @@ def inject_custom_css(dark_mode):
     # Definição de Paletas de Alto Contraste
     if dark_mode:
         bg_color = "#0e1117"
-        text_color = "#ffffff"
+        text_color = "#080505"
         card_bg = "#262730"
         border_color = "#41444d"
         metric_label_color = "#272121"
