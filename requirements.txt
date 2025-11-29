@@ -1,6 +1,8 @@
 streamlit
 pandas
-plotly
 pdfplumber
 google-generativeai
+altair
 fpdf
+openpyxl
+matplotlib
