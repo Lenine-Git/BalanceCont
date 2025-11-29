@@ -4,6 +4,9 @@ import re
 import pdfplumber
 import google.generativeai as genai
 import altair as alt
+import matplotlib.pyplot as plt
+import tempfile
+import os
 from dataclasses import dataclass
 from fpdf import FPDF
 import time
@@ -11,7 +14,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Dashboard v8.0.8",
+    page_title="INOVALENIN - Dashboard v8.0.9",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -62,7 +65,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DE NEGÓCIO (VERSÃO 8.0.8)
+# LÓGICA DE NEGÓCIO (VERSÃO 8.0.9)
 # ==============================================================================
 
 @dataclass
@@ -141,7 +144,7 @@ class AnalistaFinanceiro:
         if kpis["Liquidez Corrente"] < 0.8: score -= 15
         return min(100, max(0, score))
 
-# --- 3. SERVIÇO DE IA (ATUALIZADO v8.0.8 - PROMPT COMPARATIVO) ---
+# --- 3. SERVIÇO DE IA ---
 def listar_modelos_disponiveis(api_key):
     try:
         genai.configure(api_key=api_key)
@@ -159,10 +162,8 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
 
     contexto = f"Empresa: {nome_empresa} (CNPJ: {cnpj_empresa})\nPeríodo Analisado: {periodo_analise}"
     
-    # Monta bloco de comparação se existirem dados anteriores
     bloco_comparativo = ""
     if dre_ant and kpis_ant:
-        # Cálculo simples de variação percentual para ajudar a IA
         def calc_var(atual, anterior):
             if anterior == 0: return 0.0
             return ((atual - anterior) / anterior) * 100
@@ -231,7 +232,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     except Exception as e:
         return f"Erro IA: {str(e)}"
 
-# --- 4. GERAÇÃO DE PDF ---
+# --- 4. GERAÇÃO DE PDF COM GRÁFICOS (NOVO v8.0.9) ---
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
@@ -244,11 +245,35 @@ class PDFReport(FPDF):
         texto = "Relatorio criado por INOVALENIN Solucoes em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br"
         self.cell(0, 10, texto, 0, 0, 'C')
 
-def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
+def criar_grafico_temp(dados, labels, titulo, cor_base):
+    """Gera gráfico usando Matplotlib para embutir no PDF"""
+    plt.figure(figsize=(6, 3))
+    colors = [cor_base if v >= 0 else 'red' for v in dados]
+    bars = plt.bar(labels, dados, color=colors)
+    plt.title(titulo, fontsize=10)
+    plt.xticks(rotation=15, ha='right', fontsize=8)
+    plt.yticks(fontsize=8)
+    plt.grid(axis='y', linestyle='--', alpha=0.5)
+    
+    # Adiciona valores nas barras
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height,
+                 f'{height:,.0f}',
+                 ha='center', va='bottom', fontsize=7)
+
+    plt.tight_layout()
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    plt.savefig(temp_file.name, dpi=100)
+    plt.close()
+    return temp_file.name
+
+def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimonial):
     pdf = PDFReport()
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
+    # Cabeçalho da Empresa
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(0, 7, f"EMPRESA: {nome}", 0, 1)
     pdf.cell(0, 7, f"CNPJ: {cnpj}", 0, 1)
@@ -256,11 +281,70 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo):
     pdf.line(10, 40, 200, 40)
     pdf.ln(10)
     
+    # Texto da IA
     pdf.set_font("Arial", size=10)
     texto_limpo = texto_ia.replace('**', '').replace('##', '').replace('#', '')
     texto_limpo = texto_limpo.encode('latin-1', 'replace').decode('latin-1')
     pdf.multi_cell(0, 5, texto_limpo)
     
+    # --- NOVA PÁGINA: ANEXOS VISUAIS ---
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, "ANEXO: VISUALIZACAO DE DADOS", 0, 1, 'C')
+    pdf.ln(5)
+    
+    # 1. Gráfico DRE
+    valores_dre = [dre.receita_liquida, dre.custos, dre.lucro_bruto, dre.despesas_operacionais, dre.lucro_liquido]
+    labels_dre = ['Rec. Liq', 'Custos', 'L. Bruto', 'Despesas', 'L. Liq']
+    img_dre = criar_grafico_temp(valores_dre, labels_dre, "Estrutura DRE", "blue")
+    
+    pdf.image(img_dre, x=10, y=None, w=100) # Insere Imagem
+    os.unlink(img_dre) # Deleta temp
+    
+    # Tabela DRE ao lado ou abaixo
+    pdf.set_y(pdf.get_y() + 5)
+    pdf.set_font("Arial", 'B', 9)
+    pdf.cell(90, 8, "Dados da DRE", 1, 1, 'C', fill=False)
+    pdf.set_font("Arial", size=8)
+    
+    dados_tabela_dre = [
+        ("Receita Liquida", dre.receita_liquida),
+        ("(-) Custos", dre.custos),
+        ("(=) Lucro Bruto", dre.lucro_bruto),
+        ("(-) Despesas Oper.", dre.despesas_operacionais),
+        ("(=) Lucro Liquido", dre.lucro_liquido)
+    ]
+    
+    for desc, val in dados_tabela_dre:
+        pdf.cell(60, 6, desc, 1)
+        pdf.cell(30, 6, f"R$ {val:,.2f}", 1, 1, 'R')
+        
+    pdf.ln(10)
+    
+    # 2. Gráfico Balanço
+    valores_bp = [bp.ativo_circulante, bp.passivo_circulante, bp.ativo_total, bp.passivo_total]
+    labels_bp = ['Ativo Circ.', 'Pass. Circ.', 'Ativo Total', 'Pass. Total']
+    img_bp = criar_grafico_temp(valores_bp, labels_bp, "Estrutura Patrimonial", "green")
+    
+    pdf.image(img_bp, x=10, y=None, w=100)
+    os.unlink(img_bp)
+    
+    pdf.set_y(pdf.get_y() + 5)
+    pdf.set_font("Arial", 'B', 9)
+    pdf.cell(90, 8, "Dados do Balanco", 1, 1, 'C', fill=False)
+    pdf.set_font("Arial", size=8)
+    
+    dados_tabela_bp = [
+        ("Ativo Circulante", bp.ativo_circulante),
+        ("Passivo Circulante", bp.passivo_circulante),
+        ("Ativo Total", bp.ativo_total),
+        ("Passivo Total", bp.passivo_total)
+    ]
+    
+    for desc, val in dados_tabela_bp:
+        pdf.cell(60, 6, desc, 1)
+        pdf.cell(30, 6, f"R$ {val:,.2f}", 1, 1, 'R')
+
     return pdf.output(dest='S').encode('latin-1')
 
 # --- 5. EXTRAÇÃO ROBUSTA ---
@@ -474,7 +558,7 @@ def main():
         opcoes = listar_modelos_disponiveis(api_key) if api_key else []
         modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 8.0.8)")
+    st.title("Dashboard Analista Balanço (v 8.0.9)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral para iniciar.")
@@ -485,7 +569,6 @@ def main():
     bp = dados_iniciais['bp']
     dre = dados_iniciais['dre']
     
-    # Prepara dados anteriores para IA e Gráficos
     kpis_ant = None
     dre_ant = None
     if dados_anterior:
@@ -537,7 +620,6 @@ def main():
     # --- ABAS E MÉTRICAS ---
     tab_kpis, tab_graficos = st.tabs(["📊 Indicadores Financeiros", "📈 Visualização Gráfica"])
     
-    # Função auxiliar para Delta na UI
     def get_delta(chave):
         if kpis_ant:
             return kpis[chave] - kpis_ant[chave]
@@ -558,14 +640,11 @@ def main():
         d4.metric("GAO (Alavancagem)", f"{kpis['GAO (Alavancagem)']:.2f}", help="Lucro Bruto / EBIT", delta=get_delta("GAO (Alavancagem)"))
         d5.metric("Peso Desp. Oper.", f"{kpis['Índice Desp. Operacionais (%)']:.1f}%", help="Despesas / Rec. Líquida", delta=get_delta("Índice Desp. Operacionais (%)"), delta_color="inverse")
 
-        with st.expander("📐 Ver Fórmulas e Notas"):
-            st.markdown(f"**Liquidez Corrente:** AC / PC = {kpis['Liquidez Corrente']:.2f}")
-
     with tab_graficos:
         st.subheader("Análise Visual da Empresa")
         col_g1, col_g2 = st.columns(2)
         
-        # Gráfico DRE
+        # Gráfico Altair para Interface
         df_dre_vis = pd.DataFrame({
             'Categoria': ['Receita Líquida', 'Custos', 'Lucro Bruto', 'Despesas Op.', 'Lucro Líquido'],
             'Valor': [dre.receita_liquida, dre.custos, dre.lucro_bruto, dre.despesas_operacionais, dre.lucro_liquido],
@@ -597,12 +676,11 @@ def main():
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
     
-    if st.button("✨ Gerar Análise Automatizada (v8.0.8)", type="primary"):
+    if st.button("✨ Gerar Análise Automatizada (v8.0.9)", type="primary"):
         if not periodo_final:
             st.warning("⚠️ Informe o PERÍODO no menu lateral.")
         elif modelo and api_key:
-            with st.spinner(f"A Rede Neural INOVALENIN está comparando dados de {nome_final}..."):
-                # Passa kpis_ant e dre_ant para a função de IA atualizada
+            with st.spinner(f"A Rede Neural INOVALENIN está gerando relatório completo..."):
                 texto_ia = consultar_ia_financeira(api_key, modelo, kpis, dre, nome_final, cnpj_final, periodo_final, dre_ant, kpis_ant)
                 st.session_state['relatorio_gerado'] = texto_ia
         else:
@@ -611,8 +689,10 @@ def main():
     if st.session_state['relatorio_gerado']:
         with st.container(border=True):
             st.markdown(st.session_state['relatorio_gerado'])
-        pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final)
-        st.download_button(label="📥 Baixar PDF Completo", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
+        
+        # Passa os objetos dre e bp para a função de PDF atualizada
+        pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final, dre, bp)
+        st.download_button(label="📥 Baixar PDF Completo (Com Gráficos)", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
     st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
 
