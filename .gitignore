@@ -8,3 +8,7 @@ venv/
 
 # Arquivos do sistema
 .DS_Store
+
+# Ignorar segredos locais
+.streamlit/secrets.toml
+**/secrets.toml
