@@ -73,7 +73,7 @@ def inject_custom_css(dark_mode):
     if dark_mode:
         bg_color = "#0e1117"
         text_color = "#ffffff"
-        card_bg = "#262730"
+        card_bg = "#050508"
         border_color = "#41444d"
         metric_label_color = "#272121"
         metric_value_color = "#030202"
