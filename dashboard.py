@@ -10,7 +10,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Acesso Restrito",
+    page_title="INOVALENIN - Acesso Restrito(versão teste)",
     page_icon="🔒",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -29,7 +29,7 @@ def check_password():
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.markdown("## 🔐 Portal do Cliente - INOVALENIN")
-        st.info("Acesso exclusivo para análise de balanços.")
+        st.info("Acesso exclusivo para análise de balanços.(versão de Testes)")
         
         usuario = st.text_input("Usuário:", placeholder="Seu usuário de acesso")
         senha = st.text_input("Senha:", type="password", placeholder="Sua senha")
