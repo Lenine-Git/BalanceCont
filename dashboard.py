@@ -14,7 +14,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Análise v9.0.2",
+    page_title="INOVALENIN - Análise v9.0.3",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -67,58 +67,53 @@ def check_password():
 
 if not check_password(): st.stop()
 
-# --- CSS CUSTOMIZADO (V9.0.2 - ABORDAGEM ROBUSTA) ---
+# --- CSS CUSTOMIZADO (V9.0.3 - CONTRASTE TOTAL & CLEAN UI) ---
 def inject_custom_css(dark_mode):
-    # Lógica de Cores Dinâmica
+    # Definição de Paletas de Alto Contraste
     if dark_mode:
-        # PALETA ESCURA
         bg_color = "#0e1117"
         text_color = "#ffffff"
         card_bg = "#262730"
         border_color = "#41444d"
         metric_label_color = "#e0e0e0"
         metric_value_color = "#ffffff"
+        input_bg = "#1e1e1e"
     else:
-        # PALETA CLARA (Alto Contraste)
         bg_color = "#ffffff"
-        text_color = "#000000" # Preto absoluto
-        card_bg = "#f8f9fa"
-        border_color = "#bdc3c7"
+        text_color = "#000000" # Preto absoluto para leitura
+        card_bg = "#f8f9fa"    # Cinza muito claro
+        border_color = "#bdc3c7" # Cinza médio para borda
         metric_label_color = "#333333"
         metric_value_color = "#000000"
+        input_bg = "#ffffff"
     
     css = f"""
     <style>
-        /* --- 1. REMOÇÃO DE ELEMENTOS DO STREAMLIT (NUCLEAR) --- */
-        
-        /* Oculta o rodapé padrão e o container do rodapé */
+        /* --- 1. REMOÇÃO DE ELEMENTOS (NUCLEAR) --- */
+        #MainMenu {{visibility: hidden;}}
         footer {{visibility: hidden; display: none !important;}}
-        .stFooter {{display: none !important;}}
-        
-        /* Oculta o Header e Toolbar superior direito */
         header {{visibility: hidden; display: none !important;}}
-        [data-testid="stHeader"] {{display: none !important;}}
+        .stDeployButton {{display: none;}}
         [data-testid="stToolbar"] {{visibility: hidden; display: none !important;}}
-        
-        /* Oculta a Badge "Built with Streamlit" no canto inferior */
-        /* O seletor abaixo pega qualquer div cuja classe comece com 'viewerBadge' */
         div[class^="viewerBadge"] {{display: none !important;}}
-        
-        /* Oculta botões de fullscreen em imagens e gráficos */
         button[title="View fullscreen"] {{display: none !important;}}
         [data-testid="StyledFullScreenButton"] {{display: none !important;}}
         
-        /* --- 2. ESTILIZAÇÃO VISUAL E CONTRASTE --- */
-        
-        /* Aplica cor de fundo e texto na raiz */
+        /* --- 2. CONTRASTE E TIPOGRAFIA GLOBAL --- */
         .stApp {{
             background-color: {bg_color};
             color: {text_color};
         }}
         
-        /* Força cor de texto em elementos de texto padrão para garantir legibilidade no modo claro */
-        .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6, .stApp label, .stApp li {{
+        /* Força cor de texto em todos os níveis */
+        p, h1, h2, h3, h4, h5, h6, li, span, label, div[data-testid="stMarkdownContainer"] p {{
             color: {text_color} !important;
+        }}
+        
+        /* Inputs e Widgets - Garante legibilidade */
+        .stTextInput input, .stNumberInput input, .stSelectbox div {{
+            color: {text_color} !important;
+            background-color: {input_bg};
         }}
         
         /* 3. Abas estilo "Chrome" */
@@ -153,29 +148,27 @@ def inject_custom_css(dark_mode):
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             text-align: center;
         }}
-        
-        /* Rótulo da Métrica */
         div[data-testid="stMetricLabel"] p {{
             color: {metric_label_color} !important;
             font-weight: 600 !important;
         }}
-        
-        /* Valor da Métrica */
         div[data-testid="stMetricValue"] div {{
             color: {metric_value_color} !important;
         }}
         
-        /* Alertas (st.warning) - Garante texto visível */
-        div[data-testid="stAlert"] * {{
-            color: #31333F !important; /* Sempre escuro para contraste com amarelo */
+        /* 5. Alertas (Warning) - Contraste fixo escuro para fundo amarelo */
+        div[data-testid="stAlert"] {{
+            background-color: #ffeba0; 
         }}
-        
+        div[data-testid="stAlert"] * {{
+            color: #5c4b00 !important;
+        }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
 
 # ==============================================================================
-# LÓGICA DE NEGÓCIO (MANTIDA)
+# LÓGICA DE NEGÓCIO
 # ==============================================================================
 
 @dataclass
@@ -278,9 +271,11 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
         INSTRUÇÃO ADICIONAL:
         - Você DEVE criar uma seção específica comparando os dois períodos.
         """
+    
+    # PROMPT ATUALIZADO (v9.0.3) - Assinatura Corrigida
     prompt = f"""
     {contexto}
-    Atue como um Analista Financeiro Sênior da INOVALENIN.
+    Atue como um Analista Financeiro da INOVALENIN.
     Sua tarefa é gerar um Relatório Gerencial detalhado.
     DADOS DO PERÍODO ATUAL:
     - Liquidez Corrente: {kpis['Liquidez Corrente']:.2f}
@@ -313,7 +308,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     except Exception as e:
         return f"Erro IA: {str(e)}"
 
-# --- PDF HEADER (MANTIDO) ---
+# --- PDF HEADER ---
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
@@ -423,7 +418,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimon
         pdf.cell(30, 6, formatar_moeda(val), 1, 1, 'R')
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA (MANTIDA) ---
+# --- 5. EXTRAÇÃO ROBUSTA ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -474,7 +469,6 @@ def extrair_dados_texto(texto_completo):
                 val = parse_br_currency(val_str)
                 if val > 0: return val
         return 0.0
-    # ... Lógica de extração mantida ...
     ac = buscar_valor(["ATIVO CIRCULANTE"], txt_bp, avoid=["TOTAL", "PASSIVO"]) or buscar_valor(["Total do Ativo Circulante"], txt_bp)
     pc = buscar_valor(["PASSIVO CIRCULANTE"], txt_bp, avoid=["TOTAL", "ATIVO"]) or buscar_valor(["Total do Passivo Circulante"], txt_bp)
     est = buscar_valor(["ESTOQUES", "MERCADORIAS", "ESTOQUE FINAL"], txt_bp)
@@ -540,7 +534,7 @@ def main():
     for k in ['id_nome', 'id_cnpj', 'id_periodo']:
         if k not in st.session_state: st.session_state[k] = ""
 
-    # --- SIDEBAR LIMPA ---
+    # --- SIDEBAR ---
     with st.sidebar:
         st.header("⚙️ Configurações")
         st.info("ℹ️ **Anexar Balanço + DRE (Atual)**")
@@ -562,18 +556,23 @@ def main():
             for k in ['id_nome', 'id_cnpj', 'id_periodo']: st.session_state[k] = ""
             st.rerun()
         
-        # --- CONFIGURAÇÕES TÉCNICAS OCULTAS ---
-        with st.expander("🔐 Configurações Técnicas (Oculto)"):
-            if "GOOGLE_API_KEY" in st.secrets:
-                api_key = st.secrets["GOOGLE_API_KEY"]
-                st.success("API Key Conectada (Secrets)")
-            else:
-                api_key = st.text_input("Google API Key", type="password")
-            
-            opcoes = listar_modelos_disponiveis(api_key) if api_key else []
-            modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
+        # --- SEGURANÇA: Configurações Apenas para ADMIN (v9.0.3) ---
+        if st.session_state.get('user_role') == 'admin':
+            with st.expander("🔐 Configurações Técnicas (Oculto)"):
+                if "GOOGLE_API_KEY" in st.secrets:
+                    api_key = st.secrets["GOOGLE_API_KEY"]
+                    st.success("API Key Conectada (Secrets)")
+                else:
+                    api_key = st.text_input("Google API Key", type="password")
+                
+                opcoes = listar_modelos_disponiveis(api_key) if api_key else []
+                modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
+        else:
+            # Para clientes, definimos valores padrão silenciosamente se existirem em secrets
+            api_key = st.secrets.get("GOOGLE_API_KEY", "")
+            modelo = "models/gemini-2.0-flash" # Padrão robusto
 
-        # Dados Iniciais (Lógica de Upload)
+        # Dados Iniciais
         dados_iniciais, dados_anterior = None, None
         if uploaded_file:
             dados_iniciais, info = processar_arquivo(uploaded_file)
@@ -590,8 +589,8 @@ def main():
         cnpj_final = st.text_input("CNPJ:", value=st.session_state['id_cnpj'])
         periodo_final = st.text_input("Período Atual:", value=st.session_state['id_periodo'])
 
-    # --- TÍTULO ATUALIZADO (v9.0.2) ---
-    st.title("Análise do Balanço e DRE (v 9.0.2)")
+    # --- TÍTULO ATUALIZADO (v9.0.3) ---
+    st.title("Análise do Balanço e DRE (v 9.0.3)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral para iniciar.")
