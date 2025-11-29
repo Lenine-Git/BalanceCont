@@ -75,7 +75,7 @@ def inject_custom_css(dark_mode):
         text_color = "#ffffff"
         card_bg = "#262730"
         border_color = "#41444d"
-        metric_label_color = "#FF0000"
+        metric_label_color = "#B6B0B0"
         metric_value_color = "#030202"
         input_bg = "#1e1e1e"
     else:
@@ -161,7 +161,7 @@ def inject_custom_css(dark_mode):
             background-color: #ffeba0; 
         }}
         div[data-testid="stAlert"] * {{
-            color: #5c4b00 !important;
+            color: #030202 !important;
         }}
     </style>
     """
