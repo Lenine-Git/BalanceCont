@@ -14,11 +14,25 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Dashboard v8.0.10",
+    page_title="INOVALENIN - Dashboard v8.0.11",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# --- UTILS DE FORMATAÇÃO (NOVO v8.0.11) ---
+def formatar_moeda(valor):
+    """Formata float para BRL (R$ X.XXX,XX)"""
+    if not isinstance(valor, (int, float)): return str(valor)
+    # Formata com padrão US primeiro (1,234.56)
+    texto = f"{valor:,.2f}"
+    # Troca para padrão BR
+    return f"R$ {texto.replace(',', 'X').replace('.', ',').replace('X', '.')}"
+
+def formatar_numero_br(valor):
+    """Formata apenas número para gráficos (X.XXX)"""
+    texto = f"{valor:,.0f}"
+    return texto.replace(',', '.')
 
 # --- SISTEMA DE LOGIN ---
 def check_password():
@@ -65,7 +79,7 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 # ==============================================================================
-# LÓGICA DE NEGÓCIO (VERSÃO 8.0.10)
+# LÓGICA DE NEGÓCIO (VERSÃO 8.0.11)
 # ==============================================================================
 
 @dataclass
@@ -232,7 +246,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     except Exception as e:
         return f"Erro IA: {str(e)}"
 
-# --- 4. GERAÇÃO DE PDF COM AVISOS DE SEGURANÇA (ATUALIZADO v8.0.10) ---
+# --- 4. GERAÇÃO DE PDF COM AJUSTES DE RODAPÉ E FORMATAÇÃO (v8.0.11) ---
 class PDFReport(FPDF):
     def header(self):
         # Título Principal
@@ -241,15 +255,21 @@ class PDFReport(FPDF):
         
         # Aviso de Beta no Cabeçalho
         self.set_font('Arial', 'I', 8)
-        self.set_text_color(100, 100, 100) # Cinza para destaque sutil
+        self.set_text_color(100, 100, 100)
         aviso_header = "Relatorio gerado pela Rede Neural da INOVALENIN (Versao Beta). Todas as informacoes devem ser conferidas."
         self.cell(0, 5, aviso_header, 0, 1, 'C')
-        self.set_text_color(0, 0, 0) # Retorna para preto
+        self.set_text_color(0, 0, 0)
         self.ln(5)
 
     def footer(self):
-        # Aumentei o espaço do rodapé para caber o texto legal
+        # Posicionamento a 3.5cm do fim da página
         self.set_y(-35) 
+        
+        # --- SEPARADOR (LINHA) ---
+        self.set_draw_color(180, 180, 180) # Cinza claro
+        self.line(10, self.get_y(), 200, self.get_y())
+        self.ln(2) # Espaço após a linha
+        
         self.set_font('Arial', 'B', 7)
         self.cell(0, 4, "AVISO LEGAL:", 0, 1, 'L')
         
@@ -283,11 +303,12 @@ def criar_grafico_temp(dados, labels, titulo, cor_base):
     plt.yticks(fontsize=8)
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     
-    # Adiciona valores nas barras
+    # Adiciona valores formatados nas barras (X.XXX)
     for bar in bars:
         height = bar.get_height()
+        val_fmt = formatar_numero_br(height) # Função nova
         plt.text(bar.get_x() + bar.get_width()/2., height,
-                 f'{height:,.0f}',
+                 val_fmt,
                  ha='center', va='bottom', fontsize=7)
 
     plt.tight_layout()
@@ -298,6 +319,9 @@ def criar_grafico_temp(dados, labels, titulo, cor_base):
 
 def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimonial):
     pdf = PDFReport()
+    # --- AJUSTE DE MARGEM PARA NÃO ATROPELAR RODAPÉ ---
+    pdf.set_auto_page_break(auto=True, margin=40) 
+    
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
@@ -309,9 +333,11 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimon
     pdf.line(10, 40, 200, 40)
     pdf.ln(10)
     
-    # Texto da IA
+    # Texto da IA (Limpeza de Markdown)
     pdf.set_font("Arial", size=10)
-    texto_limpo = texto_ia.replace('**', '').replace('##', '').replace('#', '')
+    # Remove marcações de código que vazam
+    texto_limpo = texto_ia.replace('```markdown', '').replace('```', '')
+    texto_limpo = texto_limpo.replace('**', '').replace('##', '').replace('#', '')
     texto_limpo = texto_limpo.encode('latin-1', 'replace').decode('latin-1')
     pdf.multi_cell(0, 5, texto_limpo)
     
@@ -326,10 +352,10 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimon
     labels_dre = ['Rec. Liq', 'Custos', 'L. Bruto', 'Despesas', 'L. Liq']
     img_dre = criar_grafico_temp(valores_dre, labels_dre, "Estrutura DRE", "blue")
     
-    pdf.image(img_dre, x=10, y=None, w=100) # Insere Imagem
-    os.unlink(img_dre) # Deleta temp
+    pdf.image(img_dre, x=10, y=None, w=100)
+    os.unlink(img_dre)
     
-    # Tabela DRE ao lado ou abaixo
+    # Tabela DRE (Formatada BR)
     pdf.set_y(pdf.get_y() + 5)
     pdf.set_font("Arial", 'B', 9)
     pdf.cell(90, 8, "Dados da DRE", 1, 1, 'C', fill=False)
@@ -345,7 +371,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimon
     
     for desc, val in dados_tabela_dre:
         pdf.cell(60, 6, desc, 1)
-        pdf.cell(30, 6, f"R$ {val:,.2f}", 1, 1, 'R')
+        pdf.cell(30, 6, formatar_moeda(val), 1, 1, 'R') # Usando formatação BR
         
     pdf.ln(10)
     
@@ -371,7 +397,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimon
     
     for desc, val in dados_tabela_bp:
         pdf.cell(60, 6, desc, 1)
-        pdf.cell(30, 6, f"R$ {val:,.2f}", 1, 1, 'R')
+        pdf.cell(30, 6, formatar_moeda(val), 1, 1, 'R') # Usando formatação BR
 
     return pdf.output(dest='S').encode('latin-1')
 
@@ -586,14 +612,14 @@ def main():
         opcoes = listar_modelos_disponiveis(api_key) if api_key else []
         modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
 
-    st.title("Dashboard Analista Balanço (v 8.0.10)")
+    st.title("Dashboard Analista Balanço (v 8.0.11)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral para iniciar.")
         st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
         st.stop()
 
-    # --- AVISO DE SEGURANÇA (UI) (NOVO v8.0.10) ---
+    # --- AVISO DE SEGURANÇA (UI) ---
     st.warning("⚠️ **Aviso de Versão Beta:** Este sistema está em fase de testes e utiliza Inteligência Artificial. As análises geradas devem ser utilizadas com cautela e todas as informações conferidas com os documentos originais antes de qualquer tomada de decisão.", icon="⚠️")
 
     # --- LÓGICA DE DADOS ---
@@ -707,7 +733,7 @@ def main():
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
     
-    if st.button("✨ Gerar Análise Automatizada (v8.0.10)", type="primary"):
+    if st.button("✨ Gerar Análise Automatizada (v8.0.11)", type="primary"):
         if not periodo_final:
             st.warning("⚠️ Informe o PERÍODO no menu lateral.")
         elif modelo and api_key:
@@ -723,7 +749,7 @@ def main():
         
         # Passa os objetos dre e bp para a função de PDF atualizada
         pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final, dre, bp)
-        st.download_button(label="📥 Baixar PDF Completo (Com Gráficos e Avisos)", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
+        st.download_button(label="📥 Baixar PDF Completo (Formatado BR e Corrigido)", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
     st.markdown("""<div class="footer">Relatório criado por INOVALENIN Soluções em Tecnologias - www.inovalenin.com.br - atendimento@inovalenin.com.br</div>""", unsafe_allow_html=True)
 
