@@ -14,7 +14,7 @@ from datetime import datetime
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="INOVALENIN - Análise v9.0.0",
+    page_title="INOVALENIN - Análise v9.0.2",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -67,36 +67,64 @@ def check_password():
 
 if not check_password(): st.stop()
 
-# --- CSS CUSTOMIZADO (V9.0.0 - FIX VISUAL & DARK MODE) ---
+# --- CSS CUSTOMIZADO (V9.0.2 - ABORDAGEM ROBUSTA) ---
 def inject_custom_css(dark_mode):
     # Lógica de Cores Dinâmica
     if dark_mode:
+        # PALETA ESCURA
         bg_color = "#0e1117"
         text_color = "#ffffff"
         card_bg = "#262730"
         border_color = "#41444d"
+        metric_label_color = "#e0e0e0"
         metric_value_color = "#ffffff"
     else:
+        # PALETA CLARA (Alto Contraste)
         bg_color = "#ffffff"
-        text_color = "#000000" # Preto absoluto para leitura
-        card_bg = "#f0f2f6"
-        border_color = "#dce0e6"
-        metric_value_color = "#000000" # Garante contraste no card claro
+        text_color = "#000000" # Preto absoluto
+        card_bg = "#f8f9fa"
+        border_color = "#bdc3c7"
+        metric_label_color = "#333333"
+        metric_value_color = "#000000"
     
     css = f"""
     <style>
-        /* 1. Remoção Agressiva de Rodapé e Fullscreen */
-        #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden; display: none !important;}}
-        header {{visibility: hidden;}}
-        .stDeployButton {{display: none;}}
-        [data-testid="stToolbar"] {{visibility: hidden; display: none !important;}}
-        .viewerBadge_container__1QSob {{display: none !important;}} /* Tenta ocultar badge específica */
+        /* --- 1. REMOÇÃO DE ELEMENTOS DO STREAMLIT (NUCLEAR) --- */
         
-        /* 2. Abas estilo "Chrome" */
+        /* Oculta o rodapé padrão e o container do rodapé */
+        footer {{visibility: hidden; display: none !important;}}
+        .stFooter {{display: none !important;}}
+        
+        /* Oculta o Header e Toolbar superior direito */
+        header {{visibility: hidden; display: none !important;}}
+        [data-testid="stHeader"] {{display: none !important;}}
+        [data-testid="stToolbar"] {{visibility: hidden; display: none !important;}}
+        
+        /* Oculta a Badge "Built with Streamlit" no canto inferior */
+        /* O seletor abaixo pega qualquer div cuja classe comece com 'viewerBadge' */
+        div[class^="viewerBadge"] {{display: none !important;}}
+        
+        /* Oculta botões de fullscreen em imagens e gráficos */
+        button[title="View fullscreen"] {{display: none !important;}}
+        [data-testid="StyledFullScreenButton"] {{display: none !important;}}
+        
+        /* --- 2. ESTILIZAÇÃO VISUAL E CONTRASTE --- */
+        
+        /* Aplica cor de fundo e texto na raiz */
+        .stApp {{
+            background-color: {bg_color};
+            color: {text_color};
+        }}
+        
+        /* Força cor de texto em elementos de texto padrão para garantir legibilidade no modo claro */
+        .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6, .stApp label, .stApp li {{
+            color: {text_color} !important;
+        }}
+        
+        /* 3. Abas estilo "Chrome" */
         .stTabs [data-baseweb="tab-list"] {{
-            gap: 2px;
-            border-bottom: 1px solid {border_color};
+            gap: 4px;
+            border-bottom: 2px solid {border_color};
         }}
         .stTabs [data-baseweb="tab"] {{
             height: 50px;
@@ -110,12 +138,13 @@ def inject_custom_css(dark_mode):
         }}
         .stTabs [aria-selected="true"] {{
             background-color: {card_bg} !important;
-            border-bottom: 1px solid {card_bg} !important;
+            border: 2px solid {border_color} !important;
+            border-bottom: 2px solid {card_bg} !important;
             font-weight: bold;
-            color: {text_color} !important;
+            color: {metric_value_color} !important;
         }}
         
-        /* 3. Cards de Métricas (FIX CONTRASTE) */
+        /* 4. Cards de Métricas */
         div[data-testid="stMetric"] {{
             background-color: {card_bg} !important;
             border: 1px solid {border_color} !important;
@@ -125,22 +154,22 @@ def inject_custom_css(dark_mode):
             text-align: center;
         }}
         
-        /* Força a cor do Rótulo (Label) */
+        /* Rótulo da Métrica */
         div[data-testid="stMetricLabel"] p {{
-            color: {text_color} !important;
-            font-weight: bold;
+            color: {metric_label_color} !important;
+            font-weight: 600 !important;
         }}
         
-        /* Força a cor do Valor (Número) */
+        /* Valor da Métrica */
         div[data-testid="stMetricValue"] div {{
             color: {metric_value_color} !important;
         }}
         
-        /* Ajuste Geral de Fundo */
-        .stApp {{
-            background-color: {bg_color};
-            color: {text_color};
+        /* Alertas (st.warning) - Garante texto visível */
+        div[data-testid="stAlert"] * {{
+            color: #31333F !important; /* Sempre escuro para contraste com amarelo */
         }}
+        
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -284,7 +313,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     except Exception as e:
         return f"Erro IA: {str(e)}"
 
-# --- PDF HEADER FIX ---
+# --- PDF HEADER (MANTIDO) ---
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
@@ -561,8 +590,8 @@ def main():
         cnpj_final = st.text_input("CNPJ:", value=st.session_state['id_cnpj'])
         periodo_final = st.text_input("Período Atual:", value=st.session_state['id_periodo'])
 
-    # --- TÍTULO ATUALIZADO (v9.0.0) ---
-    st.title("Análise do Balanço e DRE (v 9.0.0)")
+    # --- TÍTULO ATUALIZADO (v9.0.2) ---
+    st.title("Análise do Balanço e DRE (v 9.0.2)")
     
     if not dados_iniciais:
         st.info("👋 **Pronto!** Envie o PDF ou Excel no menu lateral para iniciar.")
@@ -674,7 +703,7 @@ def main():
             st.markdown(st.session_state['relatorio_gerado'])
         
         pdf_bytes = gerar_pdf_final(st.session_state['relatorio_gerado'], nome_final, cnpj_final, periodo_final, dre, bp)
-        st.download_button(label="Baixar PDF Completo", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
+        st.download_button(label="📥 Baixar PDF Completo", data=pdf_bytes, file_name=f"Analise_{nome_final}.pdf", mime='application/pdf')
 
 if __name__ == "__main__":
     main()
