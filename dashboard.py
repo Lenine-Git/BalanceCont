@@ -326,7 +326,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
 
 # --- PDF ---
 class PDFReport(FPDF):
-    def header(self):ROMPT ATUALIZADO (v9.0.3) - Assinatura Corrigida
+    def header(self):
         self.set_font('Arial', 'B', 12)
         self.cell(0, 8, 'RELATORIO GERENCIAL DE ANALISE FINANCEIRA (DRE + BALANCO)', 0, 1, 'C')
         
