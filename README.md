@@ -1,13 +1,13 @@
 BalanceCont Dashboard (v9.0.3)
 
-> **Propriedade Intelectual:** INOVALENIN Soluções em Tecnologias  
-> **Programador Sênior:** Paulo Lenine e Equipe
+> Propriedade Intelectual: INOVALENIN Soluções em Tecnologias  
+> Programador Sênior: Paulo Lenine e Equipe
 
 O Projeto
 
-O **BalanceCont Dashboard** é uma solução avançada de *Financial Analytics* desenvolvida em Python (Streamlit). O sistema automatiza a leitura, estruturação e análise de demonstrativos contábeis (Balanço Patrimonial e DRE) a partir de arquivos PDF ou Excel.
+O BalanceCont Dashboard é uma solução avançada de *Financial Analytics* desenvolvida em Python (Streamlit). O sistema automatiza a leitura, estruturação e análise de demonstrativos contábeis (Balanço Patrimonial e DRE) a partir de arquivos PDF ou Excel.
 
-Utilizando a API do **Google Gemini (IA Generativa)**, o sistema não apenas calcula indicadores financeiros, mas atua como um Analista Financeiro Virtual, gerando relatórios textuais detalhados sobre a saúde da empresa, com gráficos e diagnósticos precisos.
+Utilizando a API do Google Gemini (IA Generativa), o sistema não apenas calcula indicadores financeiros, mas atua como um Analista Financeiro Virtual, gerando relatórios textuais detalhados sobre a saúde da empresa, com gráficos e diagnósticos precisos.
 
 Funcionalidades Principais
 
