@@ -4,7 +4,7 @@ PROJETO: BalanceCont Dashboard - Análise Financeira com IA
 VERSÃO: 9.0.3
 DATA: 2025
 AUTORIA: INOVALENIN Soluções em Tecnologias
-PROGRAMADOR SENIOR: Paulo Lenine e Equipe
+PROGRAMADOR: Paulo Lenine e Equipe
 CONTATO: atendimento@inovalenin.com.br
 
 DESCRIÇÃO:
@@ -31,7 +31,6 @@ from fpdf import FPDF
 import time
 from datetime import datetime
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
     page_title="INOVALENIN - Análise v9.0.3",
     page_icon="📊",
@@ -39,7 +38,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- UTILS DE FORMATAÇÃO ---
+# --- FORMATAÇÃO ---
 def formatar_moeda(valor):
     """Formata float para BRL (R$ X.XXX,XX)"""
     if not isinstance(valor, (int, float)): return str(valor)
@@ -51,7 +50,7 @@ def formatar_numero_br(valor):
     texto = f"{valor:,.0f}"
     return texto.replace(',', '.')
 
-# --- SISTEMA DE LOGIN ---
+# --- LOGIN ---
 def check_password():
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
@@ -86,7 +85,7 @@ def check_password():
 
 if not check_password(): st.stop()
 
-# --- CSS CUSTOMIZADO (V9.0.3 - CONTRASTE TOTAL & CLEAN UI) ---
+# --- CSS ---
 def inject_custom_css(dark_mode):
     # Definição de Paletas de Alto Contraste
     if dark_mode:
@@ -186,9 +185,7 @@ def inject_custom_css(dark_mode):
     """
     st.markdown(css, unsafe_allow_html=True)
 
-# ==============================================================================
-# LÓGICA DE NEGÓCIO
-# ==============================================================================
+# === Logica para calculos ===
 
 @dataclass
 class BalancoPatrimonial:
@@ -291,7 +288,7 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
         - Você DEVE criar uma seção específica comparando os dois períodos.
         """
     
-    # PROMPT ATUALIZADO (v9.0.3) - Assinatura Corrigida
+    # Prompt para a IA
     prompt = f"""
     {contexto}
     Atue como um Analista Financeiro da INOVALENIN.
@@ -327,9 +324,9 @@ def consultar_ia_financeira(api_key, modelo_escolhido, kpis, dados_dre, nome_emp
     except Exception as e:
         return f"Erro IA: {str(e)}"
 
-# --- PDF HEADER ---
+# --- PDF ---
 class PDFReport(FPDF):
-    def header(self):
+    def header(self):ROMPT ATUALIZADO (v9.0.3) - Assinatura Corrigida
         self.set_font('Arial', 'B', 12)
         self.cell(0, 8, 'RELATORIO GERENCIAL DE ANALISE FINANCEIRA (DRE + BALANCO)', 0, 1, 'C')
         
@@ -384,7 +381,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimon
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Cabeçalho da Empresa
+    # Cabeçalho relatorio da empresa
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(0, 7, f"EMPRESA: {nome}", 0, 1)
     pdf.cell(0, 7, f"CNPJ: {cnpj}", 0, 1)
@@ -437,7 +434,7 @@ def gerar_pdf_final(texto_ia, nome, cnpj, periodo, dre: DRE, bp: BalancoPatrimon
         pdf.cell(30, 6, formatar_moeda(val), 1, 1, 'R')
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. EXTRAÇÃO ROBUSTA ---
+# --- extração de dados Não Altere isso ---
 def parse_br_currency(valor_str):
     if not valor_str: return 0.0
     if isinstance(valor_str, (int, float)): return float(valor_str)
@@ -546,20 +543,20 @@ def processar_arquivo(uploaded_file):
     }
     return dados, (nome, cnpj, periodo)
 
-# --- 6. INTERFACE PRINCIPAL ---
+# --- Interface ---
 def main():
     if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
     if 'relatorio_gerado' not in st.session_state: st.session_state['relatorio_gerado'] = ""
     for k in ['id_nome', 'id_cnpj', 'id_periodo']:
         if k not in st.session_state: st.session_state[k] = ""
 
-    # --- SIDEBAR ---
+    # --- barra lateral ---
     with st.sidebar:
         st.header("⚙️ Configurações")
         st.info("ℹ️ **Anexar Balanço + DRE (Atual)**")
         uploaded_file = st.file_uploader("Arquivo Principal", type=["pdf", "xlsx", "xls"], key=f"uploader_{st.session_state['uploader_key']}")
         
-        # Modo Escuro/Claro Toggle
+        # Modo Escuro/Claro - ajuste de cores no CSS
         dark_mode = st.toggle("🌙 Modo Escuro", value=True)
         inject_custom_css(dark_mode)
 
@@ -575,7 +572,7 @@ def main():
             for k in ['id_nome', 'id_cnpj', 'id_periodo']: st.session_state[k] = ""
             st.rerun()
         
-        # --- SEGURANÇA: Configurações Apenas para ADMIN (v9.0.3) ---
+        # --- Configurações para ADMIN - alterar na versão final ---
         if st.session_state.get('user_role') == 'admin':
             with st.expander("🔐 Configurações Técnicas (Oculto)"):
                 if "GOOGLE_API_KEY" in st.secrets:
@@ -587,11 +584,11 @@ def main():
                 opcoes = listar_modelos_disponiveis(api_key) if api_key else []
                 modelo = st.selectbox("Modelo IA:", opcoes, index=0) if opcoes else None
         else:
-            # Para clientes, definimos valores padrão silenciosamente se existirem em secrets
+            # Para clientes acesso, melhorar na versão final
             api_key = st.secrets.get("GOOGLE_API_KEY", "")
             modelo = "models/gemini-2.0-flash" # Padrão robusto
 
-        # Dados Iniciais
+        # Inicio de dados
         dados_iniciais, dados_anterior = None, None
         if uploaded_file:
             dados_iniciais, info = processar_arquivo(uploaded_file)
@@ -602,13 +599,12 @@ def main():
         if uploaded_file_ant:
             dados_anterior, _ = processar_arquivo(uploaded_file_ant)
 
-        # Inputs de Identificação
+        # Identificação
         st.write("🏢 **Identificação**")
         nome_final = st.text_input("Razão Social:", value=st.session_state['id_nome'])
         cnpj_final = st.text_input("CNPJ:", value=st.session_state['id_cnpj'])
         periodo_final = st.text_input("Período Atual:", value=st.session_state['id_periodo'])
-
-    # --- TÍTULO ATUALIZADO (v9.0.3) ---
+    
     st.title("Análise do Balanço e DRE (v 9.0.3)")
     
     if not dados_iniciais:
@@ -651,7 +647,7 @@ def main():
 
     st.divider()
     
-    # --- ABAS ESTILIZADAS ---
+    # --- Abas da Janela - ajuste no CSS ---
     tab_kpis, tab_graficos = st.tabs(["📊 Indicadores Financeiros", "📈 Visualização Gráfica"])
     
     def get_delta(chave):
@@ -705,7 +701,7 @@ def main():
     st.divider()
     st.subheader("📝 Relatório de Análise Financeira")
     
-    # --- BOTÃO "GERAR RELATÓRIO" ---
+    # --- Botão relatório ---
     if st.button("**Gerar Relatório**", type="primary", use_container_width=False):
         if not periodo_final:
             st.warning("⚠️ Informe o PERÍODO no menu lateral.")
