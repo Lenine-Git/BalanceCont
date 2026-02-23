@@ -586,7 +586,7 @@ def main():
         else:
             # Para clientes acesso, melhorar na versão final
             api_key = st.secrets.get("GOOGLE_API_KEY", "")
-            modelo = "models/gemini-2.0-flash" # Padrão robusto
+            modelo = "models/gemini-3.1-pro-preview" # Padrão robusto
 
         # Inicio de dados
         dados_iniciais, dados_anterior = None, None
